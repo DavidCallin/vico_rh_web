@@ -26,7 +26,7 @@ return new class extends Migration
             //Professionnel
             $table->date('hire_date');
             $table->string('site')->nullable();
-            $table->enum('status', ['actif', 'demission', 'fin_contrat', 'periode_de_test'])->default('periode_de_test');
+            $table->enum('status', ['active', 'resigned', 'terminated', 'trial'])->default('trial');
 
             //Relations metier
             $table->foreignId('position_id')->contrained()->cascadeOnDelete();

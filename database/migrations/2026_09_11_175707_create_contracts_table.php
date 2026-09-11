@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('contracts', function (Blueprint $table) {
             $table->id();
-            $table->enum('contract_type', ['cdi', 'cdd', 'stage', 'interim', 'apprenticeship']);
+            $table->enum('contract_type', ['cdi', 'cdd', 'internship', 'interim', 'apprenticeship']);
             $table->date('start_date');
             $table->date('end_date')->nullable(); // Null pour CDI
             $table->decimal('base_salary', 10, 2);

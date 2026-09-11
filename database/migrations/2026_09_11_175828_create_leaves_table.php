@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::create('leaves', function (Blueprint $table) {
             $table->id();
-            $table->enum('leave_type', ['annuel', 'maladie', 'nom_paye', 'maternite', 'paternite', 'famille', 'autre']);
+            $table->enum('leave_type', ['annual', 'sick', 'unpaid', 'maternity', 'paternity', 'family', 'other']);
             $table->date('start_date');
             $table->date('end_date');
             $table->decimal('days_count', 5, 2); // Nombre de jours (peut être décimal pour temps partiel)
-            $table->enum('status', ['en_cours', 'approuvé', 'rejeté', 'annulé'])->default('en_cours');
+            $table->enum('status', ['pending', 'approved', 'rejected', 'cancelled'])->default('pending');
             $table->date('validation_date')->nullable();
             $table->text('reason')->nullable();
             

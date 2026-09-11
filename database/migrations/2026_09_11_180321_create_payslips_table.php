@@ -18,7 +18,7 @@ return new class extends Migration
             $table->decimal('total_earnings', 12, 2); // Total des gains
             $table->decimal('total_deductions', 12, 2); // Total des retenues
             $table->decimal('net_salary', 12, 2); // Salaire net
-            $table->enum('status', ['brouillon', 'valide', 'paye'])->default('brouillon');
+            $table->enum('status', ['draft', 'validated', 'paid'])->default('draft');
             $table->date('payment_date')->nullable();
             
             // FK vers employees

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('code')->unique();
             $table->enum('type', ['gain', 'deduction', 'contribution']);
             $table->decimal('amount_or_rate', 10, 2)->nullable();
-            $table->enum('calculation', ['fixe', 'pourcentage', 'formule'])->default('fixe');
+            $table->enum('calculation', ['fixed', 'percentage', 'formula'])->default('fixed');
             $table->boolean('isActive')->default(true);
             $table->timestamps();
         });
