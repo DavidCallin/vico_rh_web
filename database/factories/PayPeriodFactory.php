@@ -2,23 +2,23 @@
 
 namespace Database\Factories;
 
-use App\Models\PayPeriod;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/**
- * @extends Factory<PayPeriod>
- */
 class PayPeriodFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
+        $month = fake()->numberBetween(1, 12);
+        $year = fake()->numberBetween(2024, 2026);
+        
         return [
-            //
+            'month' => $month,
+            'year' => $year,
+            'status' => 'open',
+            'opening_date' => \Carbon\Carbon::create($year, $month, 1),
+            'closing_date' => null,
+            'closure_type' => null,
+            'closed_by' => null,
         ];
     }
 }

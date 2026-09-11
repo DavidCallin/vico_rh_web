@@ -22,6 +22,7 @@ return new class extends Migration
             $table->enum('gender', ['M', 'F']);
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
+            $table->text('address')->nullable();
 
             //Professionnel
             $table->date('hire_date');

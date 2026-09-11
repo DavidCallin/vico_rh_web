@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayPeriod extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'month', 'year', 'status', 'opening_date',
         'closing_date', 'closure_type', 'closed_by'

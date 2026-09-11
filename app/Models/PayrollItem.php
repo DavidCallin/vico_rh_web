@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayrollItem extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'name', 'code', 'type', 'amount_or_rate', 
         'calculation', 'is_active'
