@@ -10,6 +10,11 @@ use App\Models\Leave;
 use App\Models\PayPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Mail\LeaveRequestedMail;
+use App\Mail\LeaveStatusChangedMail;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
+use App\Models\LeaveBalanceHistory;
 
 class LeaveController extends Controller
 {
@@ -74,6 +79,12 @@ class LeaveController extends Controller
             'pay_period_id' => $payPeriod?->id,
         ]);
 
+        // ENVOI D'EMAIL : Notifier les RH et Managers
+        $approvers = User::role(['rh', 'manager'])->get();
+        foreach ($approvers as $approver) {
+            Mail::to($approver->email)->send(new LeaveRequestedMail($leave));
+        }
+
         return new LeaveResource($leave->load(['employee', 'payPeriod']));
     }
 
@@ -97,6 +108,7 @@ class LeaveController extends Controller
         }
 
         $user = Auth::user();
+        $newStatus = $request->status;
 
         $leave->update([
             'status' => $request->status,
@@ -106,6 +118,26 @@ class LeaveController extends Controller
                 ? ($request->rejection_reason ?: $leave->reason) 
                 : $leave->reason,
         ]);
+
+        // NOUVEAU : Si le congé est approuvé, on déduit du solde et on historise
+        if ($newStatus === 'approved') {
+            LeaveBalanceHistory::create([
+                'employee_id' => $leave->employee_id,
+                'leave_type' => $leave->leave_type,
+                'change' => -$leave->days_count, // Négatif car c'est une consommation
+                'balance_after' => 0, // (Optionnel : tu pourras calculer le vrai solde ici si tu as une méthode getBalance())
+                'reason' => "Congé approuvé (Demande #{$leave->id})",
+                'reference_id' => $leave->id,
+                'reference_type' => 'leave',
+                'created_by' => $user->employee_id,
+            ]);
+        }
+
+        //  ENVOI D'EMAIL : Notifier l'employé du résultat
+        $employee = $leave->employee;
+        if ($employee && $employee->user) {
+            Mail::to($employee->user->email)->send(new LeaveStatusChangedMail($leave, $request->status));
+        }
 
         // TODO (Étape future) : Ici, on déclenchera la mise à jour du LeaveBalanceHistory
 

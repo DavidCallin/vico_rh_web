@@ -9,6 +9,9 @@ use App\Models\PayPeriod;
 use App\Models\Payslip;
 use App\Services\PayslipGeneratorService;
 use Illuminate\Http\Request;
+use App\Mail\PayslipAvailableMail;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Mail;
 
 class PayslipController extends Controller
 {
@@ -92,6 +95,14 @@ class PayslipController extends Controller
         }
 
         $payslip->update(['status' => 'validated']);
+
+         // ENVOI D'EMAIL : Si l'option est activée dans les settings
+        if (Setting::get('payslip_auto_email', false)) {
+            $employee = $payslip->employee;
+            if ($employee && $employee->user) {
+                Mail::to($employee->user->email)->send(new PayslipAvailableMail($payslip));
+            }
+        }
 
         return new PayslipResource($payslip->load(['employee', 'payPeriod', 'lines.payrollItem']));
     }
