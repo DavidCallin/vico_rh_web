@@ -10,12 +10,27 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-//Routes protégées par authentification
-Route::middleware('auth:sanctum')->group(function (){
+// Routes protégées 
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
-
-    //Routes employés
-    Route::apiResource('employees', EmployeeController::class);
-
+    
+    // Routes employees avec permissions
+    Route::middleware('can:employees.view')->group(function () {
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+    });
+    
+    Route::middleware('can:employees.create')->group(function () {
+        Route::post('/employees', [EmployeeController::class, 'store']);
+    });
+    
+    Route::middleware('can:employees.update')->group(function () {
+        Route::put('/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
+    });
+    
+    Route::middleware('can:employees.delete')->group(function () {
+        Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']);
+    });
 });
