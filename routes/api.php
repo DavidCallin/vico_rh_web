@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\LeaveController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -15,7 +16,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
     
-    // Routes employees avec permissions
+    // ===== ROUTES EMPLOYÉS =====
     Route::middleware('can:employees.view')->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index']);
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
@@ -32,5 +33,22 @@ Route::middleware('auth:sanctum')->group(function () {
     
     Route::middleware('can:employees.delete')->group(function () {
         Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']);
+    });
+
+        // ===== ROUTES CONGÉS =====
+    Route::middleware('can:leaves.view')->group(function () {
+        Route::get('/leaves', [LeaveController::class, 'index']);
+        Route::get('/leaves/{leave}', [LeaveController::class, 'show']);
+    });
+    
+    Route::middleware('can:leaves.create')->group(function () {
+        Route::post('/leaves', [LeaveController::class, 'store']);
+        // Un employé peut annuler sa propre demande en attente
+        Route::delete('/leaves/{leave}', [LeaveController::class, 'destroy']); 
+    });
+    
+    Route::middleware('can:leaves.approve')->group(function () {
+        // On utilise POST ou PATCH pour le changement de statut
+        Route::patch('/leaves/{leave}/status', [LeaveController::class, 'updateStatus']);
     });
 });
