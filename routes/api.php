@@ -116,4 +116,32 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:employees.view')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']);
     });
+
+        // ===== ROUTES POSTES =====
+    Route::get('/positions', function () {
+        $positions = \App\Models\Position::with('department')->get();
+        return response()->json([
+            'data' => $positions->map(fn($p) => [
+                'id' => $p->id,
+                'title' => $p->title,
+                'department_id' => $p->department_id,
+                'department' => $p->department ? [
+                    'id' => $p->department->id,
+                    'name' => $p->department->name,
+                ] : null,
+            ]),
+        ]);
+    });
+
+    // ===== ROUTES CATEGORIES =====
+    Route::get('/categories', function () {
+        $categories = \App\Models\Category::all();
+        return response()->json([
+            'data' => $categories->map(fn($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'code' => $c->code,
+            ]),
+        ]);
+    });
 });
