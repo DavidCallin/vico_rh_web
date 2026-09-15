@@ -100,6 +100,10 @@ class DatabaseSeeder extends Seeder
         $users->slice(7)->each->assignRole('employee');
         $this->command->info('✅ Rôles assignés aux utilisateurs');
 
+        // 13. Settings par défaut
+        $this->call(SettingsSeeder::class);
+        $this->command->info('✅ Settings par défaut créés');
+
         $this->command->info('🎉 Base de données peuplée avec succès !');
     }
 }
