@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AbsenceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\LeaveController;
 use App\Http\Controllers\Api\PayPeriodController;
@@ -108,5 +109,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payslips/generate', [PayslipController::class, 'generate']);
         Route::post('/payslips/{payslip}/validate', [PayslipController::class, 'validate']);
         Route::post('/payslips/{payslip}/pay', [PayslipController::class, 'markAsPaid']);
+    });
+
+    // ===== ROUTES DASHBOARD =====
+    // On utilise la permission 'employees.view' comme garde-fou pour l'accès au dashboard
+    Route::middleware('can:employees.view')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'index']);
     });
 });
