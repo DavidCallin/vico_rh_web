@@ -7,9 +7,21 @@ use App\Http\Resources\PayPeriodResource;
 use App\Models\PayPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Mail\PayslipAvailableMail;
+use App\Models\Employee;
+use App\Models\Setting;
+use App\Services\PayslipGeneratorService;
+use Illuminate\Support\Facades\Mail;
 
 class PayPeriodController extends Controller
 {
+
+    protected PayslipGeneratorService $generator;
+
+    public function __construct(PayslipGeneratorService $generator)
+    {
+        $this->generator = $generator;
+    }
     /**
      * Liste des périodes de paie
      */
@@ -72,30 +84,64 @@ class PayPeriodController extends Controller
         return new PayPeriodResource($period);
     }
 
-    /**
-     * Clôturer une période de paie
+        /**
+     * Clôturer une période de paie (avec génération auto des bulletins)
      */
     public function close(PayPeriod $payPeriod)
     {
         if ($payPeriod->status === 'closed') {
-            return response()->json([
-                'message' => 'Cette période est déjà clôturée.',
-            ], 400);
+            return response()->json(['message' => 'Cette période est déjà clôturée.'], 400);
         }
 
         if ($payPeriod->status === 'archived') {
-            return response()->json([
-                'message' => 'Cette période est archivée et ne peut plus être modifiée.',
-            ], 400);
+            return response()->json(['message' => 'Cette période est archivée.'], 400);
         }
 
+        // 1. Récupérer tous les employés actifs ayant un contrat sur cette période
+        $activeEmployees = Employee::where('status', 'active')
+            ->whereHas('contracts', function ($query) use ($payPeriod) {
+                $query->where('start_date', '<=', $payPeriod->closing_date ?? now())
+                      ->where(function ($q) use ($payPeriod) {
+                          $q->whereNull('end_date')
+                            ->orWhere('end_date', '>=', $payPeriod->opening_date);
+                      });
+            })
+            ->with('user') // Pour l'envoi d'email
+            ->get();
+
+        $generatedCount = 0;
+        $errors = [];
+
+        // 2. Générer les bulletins pour chaque employé
+        foreach ($activeEmployees as $employee) {
+            try {
+                // Tente de générer le bulletin (le service gère déjà la vérification "existe déjà")
+                $payslip = $this->generator->generate($employee, $payPeriod);
+                $generatedCount++;
+
+                // 3. Envoyer l'email si l'option est activée dans les settings
+                if (Setting::get('payslip_auto_email', false) && $employee->user) {
+                    Mail::to($employee->user->email)->send(new PayslipAvailableMail($payslip));
+                }
+            } catch (\Exception $e) {
+                // On capture l'erreur pour ne pas bloquer les autres employés, mais on la log
+                $errors[] = "Employé {$employee->full_name} : " . $e->getMessage();
+            }
+        }
+
+        // 4. Clôturer officiellement la période
         $payPeriod->update([
             'status' => 'closed',
             'closing_date' => now(),
             'closure_type' => 'normal',
-            'closed_by' => Auth::id(),
+            'closed_by' => auth()->id(),
         ]);
 
-        return new PayPeriodResource($payPeriod->load('closedByUser'));
+        return response()->json([
+            'message' => "Période clôturée avec succès. {$generatedCount} bulletin(s) généré(s).",
+            'generated_count' => $generatedCount,
+            'errors' => $errors, // Utile pour le debug : ex: "Aucun contrat actif trouvé"
+            'pay_period' => new \App\Http\Resources\PayPeriodResource($payPeriod->load('closedByUser')),
+        ]);
     }
 }
