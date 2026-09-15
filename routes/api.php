@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AbsenceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\LeaveController;
@@ -50,5 +51,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:leaves.approve')->group(function () {
         // On utilise POST ou PATCH pour le changement de statut
         Route::patch('/leaves/{leave}/status', [LeaveController::class, 'updateStatus']);
+    });
+
+    // ===== ROUTES ABSENCES =====
+    Route::middleware('can:absences.view')->group(function () {
+        Route::get('/absences', [AbsenceController::class, 'index']);
+        Route::get('/absences/{absence}', [AbsenceController::class, 'show']);
+    });
+    
+    Route::middleware('can:absences.create')->group(function () {
+        Route::post('/absences', [AbsenceController::class, 'store']);
+        Route::delete('/absences/{absence}', [AbsenceController::class, 'destroy']);
+    });
+    
+    Route::middleware('can:absences.approve')->group(function () {
+        Route::patch('/absences/{absence}/status', [AbsenceController::class, 'updateStatus']);
     });
 });
