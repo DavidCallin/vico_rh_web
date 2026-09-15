@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreEmployeeRequest;
+use App\Http\Requests\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
 use Illuminate\Http\Request;
@@ -52,4 +54,32 @@ class EmployeeController extends Controller
         
         return new EmployeeResource($employee);
     }
+
+    /**
+     * Crée un nouvel employé
+     */
+    public function store(StoreEmployeeRequest $request)
+    {
+        $employee = Employee::create($request->validated());
+        return new EmployeeResource($employee->load(['position.department', 'category']));
+    }
+
+    /**
+     * Met à jour un employé existant
+     */
+    public function update(UpdateEmployeeRequest $request, Employee $employee)
+    {
+        $employee->update($request->validated());
+        return new EmployeeResource($employee->load(['position.department', 'category']));
+    }
+
+    /**
+     * Supprime un employé
+     */
+    public function destroy(Employee $employee)
+    {
+        $employee->delete();
+        return response()->noContent();
+    }
+
 }
