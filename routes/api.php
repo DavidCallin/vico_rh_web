@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\LeaveController;
+use App\Http\Controllers\Api\PayPeriodController;
+use App\Http\Controllers\Api\PayslipController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -83,5 +85,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/contracts/{contract}', [ContractController::class, 'update']);
         Route::patch('/contracts/{contract}', [ContractController::class, 'update']);
         Route::delete('/contracts/{contract}', [ContractController::class, 'destroy']);
+    });
+
+    // ===== ROUTES PÉRIODES DE PAIE =====
+    Route::middleware('can:payroll.view')->group(function () {
+        Route::get('/pay-periods', [PayPeriodController::class, 'index']);
+        Route::get('/pay-periods/{payPeriod}', [PayPeriodController::class, 'show']);
+    });
+    
+    Route::middleware('can:payroll.manage')->group(function () {
+        Route::post('/pay-periods/open', [PayPeriodController::class, 'open']);
+        Route::post('/pay-periods/{payPeriod}/close', [PayPeriodController::class, 'close']);
+    });
+
+        // ===== ROUTES BULLETINS DE PAIE =====
+    Route::middleware('can:payroll.view')->group(function () {
+        Route::get('/payslips', [PayslipController::class, 'index']);
+        Route::get('/payslips/{payslip}', [PayslipController::class, 'show']);
+    });
+    
+    Route::middleware('can:payroll.manage')->group(function () {
+        Route::post('/payslips/generate', [PayslipController::class, 'generate']);
+        Route::post('/payslips/{payslip}/validate', [PayslipController::class, 'validate']);
+        Route::post('/payslips/{payslip}/pay', [PayslipController::class, 'markAsPaid']);
     });
 });
