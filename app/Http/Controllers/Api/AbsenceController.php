@@ -79,7 +79,7 @@ class AbsenceController extends Controller
             'pay_period_id' => $payPeriod?->id,
         ]);
 
-        return new AbsenceResource($absence->load(['employee', 'pay_period']));
+        return new AbsenceResource($absence->load(['employee', 'payPeriod']));
     }
 
     /**

@@ -11,7 +11,7 @@ class Contract extends Model
     use HasFactory;
     protected $fillable = [
         'contract_type', 'start_date', 'end_date',
-        'base_salary', 'pdf_path', 'employee_id'
+        'base_salary', 'pdf_path', 'employee_id',
     ];
 
     protected $casts = [
