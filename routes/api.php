@@ -103,6 +103,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:payroll.view')->group(function () {
         Route::get('/payslips', [PayslipController::class, 'index']);
         Route::get('/payslips/{payslip}', [PayslipController::class, 'show']);
+        Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download']);
     });
     
     Route::middleware('can:payroll.manage')->group(function () {
@@ -143,5 +144,49 @@ Route::middleware('auth:sanctum')->group(function () {
                 'code' => $c->code,
             ]),
         ]);
+    });
+
+        // ===== ROUTES TEMPLATES DE CONTRATS =====
+    Route::get('/contract-templates', function () {
+        $templates = \App\Models\ContractTemplate::all();
+        return response()->json(['data' => $templates]);
+    });
+
+    Route::get('/contract-templates/{type}', function ($type) {
+        $template = \App\Models\ContractTemplate::where('type', $type)->firstOrFail();
+        return response()->json(['data' => $template]);
+    });
+
+    Route::put('/contract-templates/{type}', function (\Illuminate\Http\Request $request, $type) {
+        $template = \App\Models\ContractTemplate::where('type', $type)->firstOrFail();
+        $template->update(['content' => $request->input('content')]);
+        return response()->json(['data' => $template]);
+    });
+
+    // ===== ROUTES TEMPLATES DE BULLETINS =====
+    Route::get('/payslip-templates', function () {
+        $templates = \App\Models\PayslipTemplate::all();
+        return response()->json(['data' => $templates]);
+    });
+
+    Route::get('/payslip-templates/{id}', function ($id) {
+        $template = \App\Models\PayslipTemplate::findOrFail($id);
+        return response()->json(['data' => $template]);
+    });
+
+    Route::post('/payslip-templates', function (\Illuminate\Http\Request $request) {
+        $template = \App\Models\PayslipTemplate::create($request->all());
+        return response()->json(['data' => $template], 201);
+    });
+
+    Route::put('/payslip-templates/{id}', function (\Illuminate\Http\Request $request, $id) {
+        $template = \App\Models\PayslipTemplate::findOrFail($id);
+        $template->update($request->all());
+        return response()->json(['data' => $template]);
+    });
+
+    Route::delete('/payslip-templates/{id}', function ($id) {
+        \App\Models\PayslipTemplate::destroy($id);
+        return response()->json(['message' => 'Template supprimé']);
     });
 });

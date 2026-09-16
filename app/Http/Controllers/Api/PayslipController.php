@@ -7,11 +7,14 @@ use App\Http\Resources\PayslipResource;
 use App\Models\Employee;
 use App\Models\PayPeriod;
 use App\Models\Payslip;
+use App\Models\PayslipTemplate;
 use App\Services\PayslipGeneratorService;
 use Illuminate\Http\Request;
 use App\Mail\PayslipAvailableMail;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PayslipController extends Controller
 {
@@ -27,7 +30,7 @@ class PayslipController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Payslip::with(['employee.position.department', 'payPeriod', 'lines.payrollItem']);
+        $query = Payslip::with(['employee', 'payPeriod', 'lines.payrollItem']);
 
         if ($request->has('pay_period_id')) {
             $query->where('pay_period_id', $request->pay_period_id);
@@ -51,8 +54,60 @@ class PayslipController extends Controller
      */
     public function show(Payslip $payslip)
     {
-        $payslip->load(['employee.position.department', 'payPeriod', 'lines.payrollItem']);
+        $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
         return new PayslipResource($payslip);
+    }
+
+    /**
+     * 🎯 TÉLÉCHARGER / GÉNÉRER LE PDF DU BULLETIN
+     */
+    public function download(Payslip $payslip)
+    {
+        $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
+
+        // 1. Récupérer le template par défaut
+        $template = PayslipTemplate::where('is_default', true)->first() 
+                    ?? PayslipTemplate::first();
+
+        if (!$template) {
+            return response()->json(['message' => 'Aucun template de bulletin configuré.'], 404);
+        }
+
+        // 2. Préparer les variables
+        $employee = $payslip->employee;
+        $period = $payslip->payPeriod;
+        
+        // Calcul du salaire de base (dernier contrat actif)
+        $baseSalary = $employee->contracts()->latest('start_date')->first()?->base_salary ?? 0;
+
+        // 3. Remplacer les variables dans le template HTML
+        $htmlContent = $template->content;
+        $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
+        $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
+        $htmlContent = str_replace('{{period}}', $period->label ?? $period->month . '/' . $period->year, $htmlContent);
+        $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
+        $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
+        $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
+        $htmlContent = str_replace('{{base_salary}}', number_format($baseSalary, 2, ',', ' ') . ' €', $htmlContent);
+        $htmlContent = str_replace('{{transport_allowance}}', '0,00 €', $htmlContent); // À adapter selon ta logique de calcul
+
+        // 4. Générer le PDF
+        $pdf = Pdf::loadHTML($htmlContent)
+                  ->setPaper('a4', 'portrait')
+                  ->setOption('margin-top', 10)
+                  ->setOption('margin-bottom', 10);
+
+        // 5. Sauvegarder le fichier (optionnel mais recommandé pour l'historique)
+        $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $period->year . '_' . $period->month . '.pdf';
+        Storage::disk('public')->put($fileName, $pdf->output());
+
+        // Mettre à jour le chemin dans la base si le champ existe
+        if (Schema::hasColumn('payslips', 'file_path')) {
+            $payslip->update(['file_path' => $fileName]);
+        }
+
+        // 6. Retourner le PDF en téléchargement
+        return $pdf->download('Bulletin_' . $employee->matricule . '_' . $period->month . '_' . $period->year . '.pdf');
     }
 
     /**
@@ -96,7 +151,7 @@ class PayslipController extends Controller
 
         $payslip->update(['status' => 'validated']);
 
-         // ENVOI D'EMAIL : Si l'option est activée dans les settings
+        // ENVOI D'EMAIL : Si l'option est activée dans les settings
         if (Setting::get('payslip_auto_email', false)) {
             $employee = $payslip->employee;
             if ($employee && $employee->user) {

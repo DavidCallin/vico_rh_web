@@ -63,17 +63,29 @@ class ContractController extends Controller
             'pdf_path' => $pdfPath,
         ]);
 
-        // 🎯 GÉNÉRATION AUTOMATIQUE DU PDF
-        $pdf = Pdf::loadView('pdf.contract', [
-            'contract' => $contract->load('employee')
-        ]);
+        // 🎯 GÉNÉRATION DU PDF AVEC LE TEMPLATE DYNAMIQUE
+        $template = \App\Models\ContractTemplate::where('type', $contract->contract_type)->first();
+        
+        if ($template) {
+            // Remplacer les variables dans le template
+            $htmlContent = $template->content;
+            $htmlContent = str_replace('{{employee_name}}', $contract->employee->full_name, $htmlContent);
+            $htmlContent = str_replace('{{matricule}}', $contract->employee->matricule, $htmlContent);
+            $htmlContent = str_replace('{{address}}', $contract->employee->address ?? 'Non renseignée', $htmlContent);
+            $htmlContent = str_replace('{{start_date}}', \Carbon\Carbon::parse($contract->start_date)->format('d/m/Y'), $htmlContent);
+            $htmlContent = str_replace('{{end_date}}', $contract->end_date ? \Carbon\Carbon::parse($contract->end_date)->format('d/m/Y') : 'Illimité', $htmlContent);
+            $htmlContent = str_replace('{{salary}}', number_format($contract->base_salary, 2, ',', ' ') . ' €', $htmlContent);
+            $htmlContent = str_replace('{{contract_type}}', strtoupper($contract->contract_type), $htmlContent);
+            $htmlContent = str_replace('{{company_name}}', 'VICO RH', $htmlContent);
+
+            $pdf = Pdf::loadHTML($htmlContent);
+        } else {
+            // Fallback sur le template Blade par défaut
+            $pdf = Pdf::loadView('pdf.contract', ['contract' => $contract->load('employee')]);
+        }
 
         $fileName = 'contrats/contrat_' . $contract->employee->matricule . '_' . date('Y-m-d') . '.pdf';
-        
-        // Sauvegarder le PDF dans le storage public
         Storage::disk('public')->put($fileName, $pdf->output());
-
-        // Mettre à jour le chemin du fichier dans la base de données
         $contract->update(['file_path' => $fileName]);
 
         return response()->json([
@@ -123,18 +135,30 @@ class ContractController extends Controller
             }
         }
 
-        // 5. 🎯 GÉNÉRER UN NOUVEAU PDF AVEC LES NOUVELLES DONNÉES
-        $pdf = Pdf::loadView('pdf.contract', [
-            'contract' => $contract->load('employee')
-        ]);
+            // 🎯 GÉNÉRATION DU PDF AVEC LE TEMPLATE DYNAMIQUE
+            $template = \App\Models\ContractTemplate::where('type', $contract->contract_type)->first();
+            
+            if ($template) {
+                // Remplacer les variables dans le template
+                $htmlContent = $template->content;
+                $htmlContent = str_replace('{{employee_name}}', $contract->employee->full_name, $htmlContent);
+                $htmlContent = str_replace('{{matricule}}', $contract->employee->matricule, $htmlContent);
+                $htmlContent = str_replace('{{address}}', $contract->employee->address ?? 'Non renseignée', $htmlContent);
+                $htmlContent = str_replace('{{start_date}}', \Carbon\Carbon::parse($contract->start_date)->format('d/m/Y'), $htmlContent);
+                $htmlContent = str_replace('{{end_date}}', $contract->end_date ? \Carbon\Carbon::parse($contract->end_date)->format('d/m/Y') : 'Illimité', $htmlContent);
+                $htmlContent = str_replace('{{salary}}', number_format($contract->base_salary, 2, ',', ' ') . ' €', $htmlContent);
+                $htmlContent = str_replace('{{contract_type}}', strtoupper($contract->contract_type), $htmlContent);
+                $htmlContent = str_replace('{{company_name}}', 'VICO RH', $htmlContent);
 
-        $fileName = 'contrats/contrat_' . $contract->employee->matricule . '_' . date('Y-m-d') . '.pdf';
-        
-        // Sauvegarder le nouveau PDF
-        Storage::disk('public')->put($fileName, $pdf->output());
+                $pdf = Pdf::loadHTML($htmlContent);
+            } else {
+                // Fallback sur le template Blade par défaut
+                $pdf = Pdf::loadView('pdf.contract', ['contract' => $contract->load('employee')]);
+            }
 
-        // 6. Mettre à jour le chemin du fichier dans la base de données
-        $contract->update(['file_path' => $fileName]);
+            $fileName = 'contrats/contrat_' . $contract->employee->matricule . '_' . date('Y-m-d') . '.pdf';
+            Storage::disk('public')->put($fileName, $pdf->output());
+            $contract->update(['file_path' => $fileName]);
 
         // 7. Retourner la réponse
         return response()->json([
