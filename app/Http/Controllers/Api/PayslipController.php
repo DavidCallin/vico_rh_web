@@ -8,12 +8,14 @@ use App\Models\Employee;
 use App\Models\PayPeriod;
 use App\Models\Payslip;
 use App\Models\PayslipTemplate;
+use App\Models\LeaveBalance; // ✅ Ajouté pour les congés
 use App\Services\PayslipGeneratorService;
 use Illuminate\Http\Request;
 use App\Mail\PayslipAvailableMail;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema; // ✅ CORRECTION : Import de Schema
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class PayslipController extends Controller
@@ -59,13 +61,12 @@ class PayslipController extends Controller
     }
 
     /**
-     * 🎯 TÉLÉCHARGER / GÉNÉRER LE PDF DU BULLETIN
+     * 🎯 TÉLÉCHARGER / GÉNÉRER LE PDF DU BULLETIN (Version avancée synchronisée)
      */
     public function download(Payslip $payslip)
     {
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
 
-        // 1. Récupérer le template par défaut
         $template = PayslipTemplate::where('is_default', true)->first() 
                     ?? PayslipTemplate::first();
 
@@ -73,41 +74,79 @@ class PayslipController extends Controller
             return response()->json(['message' => 'Aucun template de bulletin configuré.'], 404);
         }
 
-        // 2. Préparer les variables
         $employee = $payslip->employee;
         $period = $payslip->payPeriod;
         
-        // Calcul du salaire de base (dernier contrat actif)
-        $baseSalary = $employee->contracts()->latest('start_date')->first()?->base_salary ?? 0;
+        // 1. Récupérer le solde de congé
+        $currentYear = now()->year;
+        $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)
+            ->where('year', $currentYear)
+            ->first();
+        
+        $leavesTaken = $leaveBalance ? $leaveBalance->taken_days : 0;
+        $leavesRemaining = $leaveBalance ? $leaveBalance->remaining_days : 0;
 
-        // 3. Remplacer les variables dans le template HTML
+        // 2. Regrouper les lignes par type
+        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'earning');
+        $deductionLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'deduction');
+
+        $totalEarnings = $earningLines->sum('amount');
+        $totalDeductions = $deductionLines->sum('amount');
+
+        // 3. Construire le HTML des lignes de gains
+        $earningsHtml = '';
+        foreach ($earningLines as $line) {
+            $amount = number_format($line->amount, 2, ',', ' ') . ' €';
+            $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
+            $earningsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>{$amount}</td></tr>";
+        }
+        $earningsHtml .= "<tr style='font-weight:bold; background-color:#f0f9ff;'><td>TOTAL GAINS</td><td style='text-align:right;'>" . number_format($totalEarnings, 2, ',', ' ') . " €</td></tr>";
+
+        // 4. Construire le HTML des lignes de déductions
+        $deductionsHtml = '';
+        foreach ($deductionLines as $line) {
+            $amount = number_format($line->amount, 2, ',', ' ') . ' €';
+            $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
+            $deductionsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>-{$amount}</td></tr>";
+        }
+        $deductionsHtml .= "<tr style='font-weight:bold; background-color:#fef2f2;'><td>TOTAL DÉDUCTIONS</td><td style='text-align:right;'>-" . number_format($totalDeductions, 2, ',', ' ') . " €</td></tr>";
+
+        // 5. Remplacer les variables dans le template
         $htmlContent = $template->content;
         $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
         $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
         $htmlContent = str_replace('{{period}}', $period->label ?? $period->month . '/' . $period->year, $htmlContent);
+        
+        // Variables de congé
+        $htmlContent = str_replace('{{leaves_taken}}', number_format($leavesTaken, 2, ',', ' '), $htmlContent);
+        $htmlContent = str_replace('{{leaves_remaining}}', number_format($leavesRemaining, 2, ',', ' '), $htmlContent);
+
+        // Variables financières globales
         $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
-        $htmlContent = str_replace('{{base_salary}}', number_format($baseSalary, 2, ',', ' ') . ' €', $htmlContent);
-        $htmlContent = str_replace('{{transport_allowance}}', '0,00 €', $htmlContent); // À adapter selon ta logique de calcul
+        
+        // Injection des tableaux de lignes
+        $htmlContent = str_replace('{{earnings_lines}}', $earningsHtml, $htmlContent);
+        $htmlContent = str_replace('{{deductions_lines}}', $deductionsHtml, $htmlContent);
 
-        // 4. Générer le PDF
+        // 6. Générer le PDF
         $pdf = Pdf::loadHTML($htmlContent)
                   ->setPaper('a4', 'portrait')
                   ->setOption('margin-top', 10)
                   ->setOption('margin-bottom', 10);
 
-        // 5. Sauvegarder le fichier (optionnel mais recommandé pour l'historique)
-        $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $period->year . '_' . $period->month . '.pdf';
-        Storage::disk('public')->put($fileName, $pdf->output());
-
-        // Mettre à jour le chemin dans la base si le champ existe
+        // 7. Sauvegarder le fichier (avec padding du mois pour avoir "09" au lieu de "9")
+        $monthPadded = str_pad($period->month, 2, '0', STR_PAD_LEFT);
+        $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $period->year . '_' . $monthPadded . '.pdf';
+        
         if (Schema::hasColumn('payslips', 'file_path')) {
+            Storage::disk('public')->put($fileName, $pdf->output());
             $payslip->update(['file_path' => $fileName]);
         }
 
-        // 6. Retourner le PDF en téléchargement
-        return $pdf->download('Bulletin_' . $employee->matricule . '_' . $period->month . '_' . $period->year . '.pdf');
+        // 8. Retourner le PDF en téléchargement
+        return $pdf->download('Bulletin_' . $employee->matricule . '_' . $monthPadded . '_' . $period->year . '.pdf');
     }
 
     /**
@@ -151,7 +190,6 @@ class PayslipController extends Controller
 
         $payslip->update(['status' => 'validated']);
 
-        // ENVOI D'EMAIL : Si l'option est activée dans les settings
         if (Setting::get('payslip_auto_email', false)) {
             $employee = $payslip->employee;
             if ($employee && $employee->user) {

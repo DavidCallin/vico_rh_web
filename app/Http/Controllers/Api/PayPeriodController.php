@@ -56,6 +56,59 @@ class PayPeriodController extends Controller
         return new PayPeriodResource($payPeriod);
     }
 
+        /**
+     * 🎯 CRÉER une nouvelle période de paie
+     * Vérifie qu'aucune période n'est déjà ouverte
+     */
+    public function store(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|min:1|max:12',
+            'year' => 'required|integer|min:2020|max:2100',
+        ]);
+
+        // ✅ VÉRIFIER QU'AUCUNE PÉRIODE N'EST DÉJÀ OUVERTE
+        $openPeriod = PayPeriod::where('status', 'open')->first();
+        if ($openPeriod) {
+            return response()->json([
+                'message' => "Impossible de créer une nouvelle période. La période '{$openPeriod->label}' est déjà ouverte. Vous devez d'abord la clôturer.",
+            ], 409);
+        }
+
+        // Vérifier qu'elle n'existe pas déjà
+        $exists = PayPeriod::where('month', $request->month)
+            ->where('year', $request->year)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Cette période de paie existe déjà.',
+            ], 409);
+        }
+
+        // Calculer les dates de début et fin
+        $startDate = \Carbon\Carbon::createFromDate($request->year, $request->month, 1)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        // Générer le label (ex: "Janvier 2026")
+        $label = $startDate->locale('fr')->isoFormat('MMMM YYYY');
+
+        $period = PayPeriod::create([
+            'month' => $request->month,
+            'year' => $request->year,
+            'label' => ucfirst($label),
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'status' => 'open',
+            'opening_date' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Période de paie créée avec succès.',
+            'data' => new PayPeriodResource($period),
+        ], 201);
+    }
+
     /**
      * 🎯 GÉNÉRER LES BULLETINS (SANS clôturer la période)
      * Appelée par le bouton "Générer" du frontend
@@ -110,9 +163,9 @@ class PayPeriodController extends Controller
         ]);
     }
 
-    /**
+        /**
      * 🎯 RÉOUVRIR une période clôturée
-     * Appelée par le bouton "Réouvrir" du frontend
+     * Vérifie qu'aucune autre période n'est déjà ouverte
      */
     public function open(PayPeriod $payPeriod)
     {
@@ -122,6 +175,14 @@ class PayPeriodController extends Controller
 
         if ($payPeriod->status === 'archived') {
             return response()->json(['message' => 'Impossible de réouvrir une période archivée.'], 400);
+        }
+
+        // ✅ VÉRIFIER QU'AUCUNE AUTRE PÉRIODE N'EST OUVERTE
+        $openPeriod = PayPeriod::where('status', 'open')->first();
+        if ($openPeriod && $openPeriod->id !== $payPeriod->id) {
+            return response()->json([
+                'message' => "Impossible de réouvrir cette période. La période '{$openPeriod->label}' est déjà ouverte. Vous devez d'abord la clôturer.",
+            ], 409);
         }
 
         $payPeriod->update([
@@ -193,22 +254,20 @@ class PayPeriodController extends Controller
         ];
     }
 
-    /**
-     * 🎯 MÉTHODE PRIVÉE : Générer le PDF d'un bulletin avec le template
+        /**
+     * 🎯 MÉTHODE PRIVÉE : Générer le PDF d'un bulletin avec regroupement des rubriques
      */
     private function generatePayslipPdf(Payslip $payslip): void
     {
-        // Vérifier que la colonne file_path existe dans la table payslips
         if (!\Schema::hasColumn('payslips', 'file_path')) {
             return;
         }
 
-        // Récupérer le template par défaut
-        $template = PayslipTemplate::where('is_default', true)->first() 
-                    ?? PayslipTemplate::first();
+        $template = \App\Models\PayslipTemplate::where('is_default', true)->first() 
+                    ?? \App\Models\PayslipTemplate::first();
 
         if (!$template) {
-            return; // Pas de template configuré, on ignore
+            return;
         }
 
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
@@ -216,29 +275,66 @@ class PayPeriodController extends Controller
         $employee = $payslip->employee;
         $period = $payslip->payPeriod;
         
-        // Calcul du salaire de base
-        $baseSalary = $employee->contracts()->latest('start_date')->first()?->base_salary ?? 0;
+        // 1. Récupérer le solde de congé de l'année en cours
+        $currentYear = now()->year;
+        $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)
+            ->where('year', $currentYear)
+            ->first();
+        
+        $leavesTaken = $leaveBalance ? $leaveBalance->taken_days : 0;
+        $leavesRemaining = $leaveBalance ? $leaveBalance->remaining_days : 0;
 
-        // Remplacer les variables dans le template HTML
+        // 2. Regrouper les lignes par type
+        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'earning');
+        $deductionLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'deduction');
+
+        $totalEarnings = $earningLines->sum('amount');
+        $totalDeductions = $deductionLines->sum('amount');
+
+        // 3. Construire le HTML des lignes de gains
+        $earningsHtml = '';
+        foreach ($earningLines as $line) {
+            $amount = number_format($line->amount, 2, ',', ' ') . ' €';
+            $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
+            $earningsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>{$amount}</td></tr>";
+        }
+        $earningsHtml .= "<tr style='font-weight:bold; background-color:#f0f9ff;'><td>TOTAL GAINS</td><td style='text-align:right;'>" . number_format($totalEarnings, 2, ',', ' ') . " €</td></tr>";
+
+        // 4. Construire le HTML des lignes de déductions
+        $deductionsHtml = '';
+        foreach ($deductionLines as $line) {
+            $amount = number_format($line->amount, 2, ',', ' ') . ' €';
+            $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
+            $deductionsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>-{$amount}</td></tr>";
+        }
+        $deductionsHtml .= "<tr style='font-weight:bold; background-color:#fef2f2;'><td>TOTAL DÉDUCTIONS</td><td style='text-align:right;'>-" . number_format($totalDeductions, 2, ',', ' ') . " €</td></tr>";
+
+        // 5. Remplacer les variables dans le template
         $htmlContent = $template->content;
         $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
         $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
         $htmlContent = str_replace('{{period}}', $period->label ?? $period->month . '/' . $period->year, $htmlContent);
+        
+        // Variables de congé
+        $htmlContent = str_replace('{{leaves_taken}}', number_format($leavesTaken, 2, ',', ' '), $htmlContent);
+        $htmlContent = str_replace('{{leaves_remaining}}', number_format($leavesRemaining, 2, ',', ' '), $htmlContent);
+
+        // Variables financières
         $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
-        $htmlContent = str_replace('{{base_salary}}', number_format($baseSalary, 2, ',', ' ') . ' €', $htmlContent);
-        $htmlContent = str_replace('{{transport_allowance}}', '0,00 €', $htmlContent);
+        
+        // Injection des tableaux de lignes
+        $htmlContent = str_replace('{{earnings_lines}}', $earningsHtml, $htmlContent);
+        $htmlContent = str_replace('{{deductions_lines}}', $deductionsHtml, $htmlContent);
 
-        // Générer le PDF
-        $pdf = Pdf::loadHTML($htmlContent)
+        // 6. Générer et sauvegarder le PDF
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent)
                   ->setPaper('a4', 'portrait');
 
-        // Sauvegarder
         $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $period->year . '_' . str_pad($period->month, 2, '0', STR_PAD_LEFT) . '.pdf';
-        Storage::disk('public')->put($fileName, $pdf->output());
+        \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $pdf->output());
 
-        // Mettre à jour le chemin dans la base
         $payslip->update(['file_path' => $fileName]);
     }
 }

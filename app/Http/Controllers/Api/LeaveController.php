@@ -8,13 +8,14 @@ use App\Http\Requests\StoreLeaveRequest;
 use App\Http\Resources\LeaveResource;
 use App\Models\Leave;
 use App\Models\PayPeriod;
+use App\Models\LeaveBalance; // ✅ Ajouté
+use App\Models\LeaveBalanceHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Mail\LeaveRequestedMail;
 use App\Mail\LeaveStatusChangedMail;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
-use App\Models\LeaveBalanceHistory;
 
 class LeaveController extends Controller
 {
@@ -26,30 +27,24 @@ class LeaveController extends Controller
         $user = Auth::user();
         $query = Leave::with(['employee.position.department', 'validator']);
 
-        // Si c'est un employé simple, il ne voit que SES congés
-        if($user->hasRole('employee')){
+        if ($user->hasRole('employee')) {
             $query->where('employee_id', $user->employee_id);
-        }
-
-        // Si c'est un manager, il voit les congés de SON département
-        elseif($user->hasRole('manager') && $user->employee){
+        } elseif ($user->hasRole('manager') && $user->employee) {
             $departmentId = $user->employee->position->department_id ?? null;
-            if($departmentId){
-                $query->whereHas('employee.position', function($q) use ($departmentId){
+            if ($departmentId) {
+                $query->whereHas('employee.position', function ($q) use ($departmentId) {
                     $q->where('department_id', $departmentId);
                 });
             }
         }
 
-        // Admin et RH voient tout (éventuellement filtrable par département/date)
-        if($request->has('status')){
+        if ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
         $leaves = $query->orderBy('created_at', 'desc')->paginate(15);
         return LeaveResource::collection($leaves);
     }
-   
 
     /**
      * Créer une demande de congé
@@ -58,12 +53,10 @@ class LeaveController extends Controller
     {
         $user = Auth::user();
 
-        // Calcul du nombre de jours de congé
         $startDate = \Carbon\Carbon::parse($request->start_date);
         $endDate = \Carbon\Carbon::parse($request->end_date);
-        $daysCount = $startDate->diffInDays($endDate) + 1; // +1 pour inclure le jour de début
+        $daysCount = $startDate->diffInDays($endDate) + 1;
 
-        //Trouver la période de paie correspondante
         $payPeriod = PayPeriod::where('year', $startDate->year)
             ->where('month', $startDate->month)
             ->first();
@@ -75,15 +68,12 @@ class LeaveController extends Controller
             'days_count' => $daysCount,
             'status' => 'pending',
             'reason' => $request->reason,
-            'employee_id' => $user->employee_id, // L'employé connecté
+            'employee_id' => $user->employee_id,
             'pay_period_id' => $payPeriod?->id,
         ]);
 
-        // ENVOI D'EMAIL : Notifier les RH et Managers
-        // $approvers = User::role(['rh', 'manager'])->get();
-        // foreach ($approvers as $approver) {
-        //     Mail::to($approver->email)->send(new LeaveRequestedMail($leave));
-        // }
+        // 🎯 MISE À JOUR DU SOLDE : Ajouter aux jours en attente
+        $this->updateLeaveBalance($leave->employee_id, $startDate->year, $daysCount, 'pending_add');
 
         return new LeaveResource($leave->load(['employee', 'payPeriod']));
     }
@@ -102,52 +92,61 @@ class LeaveController extends Controller
      */
     public function updateStatus(ApproveLeaveRequest $request, Leave $leave)
     {
-        // Empêcher de modifier un congé déjà traité
         if ($leave->status !== 'pending') {
             return response()->json(['message' => 'Ce congé a déjà été traité.'], 400);
         }
 
         $user = Auth::user();
         $newStatus = $request->status;
+        $year = \Carbon\Carbon::parse($leave->start_date)->year;
 
         $leave->update([
-            'status' => $request->status,
+            'status' => $newStatus,
             'validation_date' => now(),
             'validator_id' => $user->employee_id,
-            'reason' => $request->status === 'rejected' 
+            'reason' => $newStatus === 'rejected' 
                 ? ($request->rejection_reason ?: $leave->reason) 
                 : $leave->reason,
         ]);
 
-        //  Si le congé est approuvé, on déduit du solde et on historise
+        // 🎯 MISE À JOUR DU SOLDE SELON LA DÉCISION
         if ($newStatus === 'approved') {
-            LeaveBalanceHistory::create([
-                'employee_id' => $leave->employee_id,
-                'leave_type' => $leave->leave_type,
-                'change' => -$leave->days_count, // Négatif car c'est une consommation
-                'balance_after' => 0, // (Optionnel : tu pourras calculer le vrai solde ici si tu as une méthode getBalance())
-                'reason' => "Congé approuvé (Demande #{$leave->id})",
-                'reference_id' => $leave->id,
-                'reference_type' => 'leave',
-                'created_by' => $user->employee_id,
-                'date' => now(),
-                'days_count' => -$leave->days_count,
-            ]);
+            $this->updateLeaveBalance($leave->employee_id, $year, $leave->days_count, 'approve');
+        } elseif ($newStatus === 'rejected' || $newStatus === 'cancelled') {
+            $this->updateLeaveBalance($leave->employee_id, $year, $leave->days_count, 'reject');
         }
 
-        //  ENVOI D'EMAIL : Notifier l'employé du résultat
+        // 🎯 HISTORISATION PRÉCISE DU SOLDE
+        $currentBalance = LeaveBalance::where('employee_id', $leave->employee_id)
+            ->where('year', $year)
+            ->first();
+
+        LeaveBalanceHistory::create([
+            'employee_id' => $leave->employee_id,
+            'leave_type' => $leave->leave_type,
+            'change' => $newStatus === 'approved' ? -$leave->days_count : 0,
+            'balance_after' => $currentBalance ? $currentBalance->remaining_days : 0, // ✅ Vrai solde calculé
+            'reason' => $newStatus === 'approved' 
+                ? "Congé approuvé (Demande #{$leave->id})" 
+                : "Congé rejeté/annulé (Demande #{$leave->id})",
+            'reference_id' => $leave->id,
+            'reference_type' => 'leave',
+            'created_by' => $user->employee_id,
+            'date' => now(),
+            'days_count' => $leave->days_count,
+        ]);
+
+        // ENVOI D'EMAIL
         $employee = $leave->employee;
         if ($employee && $employee->user) {
-            Mail::to($employee->user->email)->send(new LeaveStatusChangedMail($leave, $request->status));
+            Mail::to($employee->user->email)->send(new LeaveStatusChangedMail($leave, $newStatus));
         }
-
-        // TODO (Étape future) : Ici, on déclenchera la mise à jour du LeaveBalanceHistory
 
         return new LeaveResource($leave->load(['validator']));
     }
 
-        /**
-     * Supprimer un congé (seulement s'il est en attente et par son créateur ou un admin)
+    /**
+     * Supprimer un congé (seulement s'il est en attente)
      */
     public function destroy(Leave $leave)
     {
@@ -161,10 +160,40 @@ class LeaveController extends Controller
             return response()->json(['message' => 'Non autorisé.'], 403);
         }
 
+        // 🎯 MISE À JOUR DU SOLDE : Retirer des jours en attente avant suppression
+        $year = \Carbon\Carbon::parse($leave->start_date)->year;
+        $this->updateLeaveBalance($leave->employee_id, $year, $leave->days_count, 'pending_remove');
+
         $leave->delete();
 
         return response()->noContent();
     }
 
+    /**
+     * 🛠️ MÉTHODE PRIVÉE : Gestion centralisée des calculs de solde
+     */
+    private function updateLeaveBalance(int $employeeId, int $year, float $days, string $action): void
+    {
+        $balance = LeaveBalance::firstOrCreate(
+            ['employee_id' => $employeeId, 'year' => $year],
+            ['total_days' => 25, 'taken_days' => 0, 'remaining_days' => 25, 'pending_days' => 0]
+        );
 
+        switch ($action) {
+            case 'pending_add':
+                $balance->pending_days += $days;
+                break;
+            case 'approve':
+                $balance->taken_days += $days;
+                $balance->pending_days = max(0, $balance->pending_days - $days);
+                break;
+            case 'reject':
+            case 'pending_remove':
+                $balance->pending_days = max(0, $balance->pending_days - $days);
+                break;
+        }
+
+        // Recalcule automatiquement : remaining = total - taken - pending
+        $balance->recalculateRemaining();
+    }
 }
