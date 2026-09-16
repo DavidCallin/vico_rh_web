@@ -80,10 +80,10 @@ class LeaveController extends Controller
         ]);
 
         // ENVOI D'EMAIL : Notifier les RH et Managers
-        $approvers = User::role(['rh', 'manager'])->get();
-        foreach ($approvers as $approver) {
-            Mail::to($approver->email)->send(new LeaveRequestedMail($leave));
-        }
+        // $approvers = User::role(['rh', 'manager'])->get();
+        // foreach ($approvers as $approver) {
+        //     Mail::to($approver->email)->send(new LeaveRequestedMail($leave));
+        // }
 
         return new LeaveResource($leave->load(['employee', 'payPeriod']));
     }
@@ -119,7 +119,7 @@ class LeaveController extends Controller
                 : $leave->reason,
         ]);
 
-        // NOUVEAU : Si le congé est approuvé, on déduit du solde et on historise
+        //  Si le congé est approuvé, on déduit du solde et on historise
         if ($newStatus === 'approved') {
             LeaveBalanceHistory::create([
                 'employee_id' => $leave->employee_id,
@@ -130,6 +130,8 @@ class LeaveController extends Controller
                 'reference_id' => $leave->id,
                 'reference_type' => 'leave',
                 'created_by' => $user->employee_id,
+                'date' => now(),
+                'days_count' => -$leave->days_count,
             ]);
         }
 
