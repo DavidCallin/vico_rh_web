@@ -1,0 +1,15 @@
+[90m= [39m[
+    [32m"[39m[32mmatricule[39m[32m"[39m,
+    [32m"[39m[32mfirst_name[39m[32m"[39m,
+    [32m"[39m[32mlast_name[39m[32m"[39m,
+    [32m"[39m[32mbirth_date[39m[32m"[39m,
+    [32m"[39m[32mgender[39m[32m"[39m,
+    [32m"[39m[32mphone[39m[32m"[39m,
+    [32m"[39m[32memail[39m[32m"[39m,
+    [32m"[39m[32maddress[39m[32m"[39m,
+    [32m"[39m[32mhire_date[39m[32m"[39m,
+    [32m"[39m[32msite[39m[32m"[39m,
+    [32m"[39m[32mstatus[39m[32m"[39m,
+    [32m"[39m[32mposition_id[39m[32m"[39m,
+    [32m"[39m[32mcategory_id[39m[32m"[39m,
+  ]
