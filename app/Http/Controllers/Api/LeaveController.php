@@ -72,6 +72,9 @@ class LeaveController extends Controller
             'pay_period_id' => $payPeriod?->id,
         ]);
 
+            app(\App\Services\NotificationService::class)->notifyNewLeaveRequest($leave);
+
+
         // 🎯 MISE À JOUR DU SOLDE : Ajouter aux jours en attente
         $this->updateLeaveBalance($leave->employee_id, $startDate->year, $daysCount, 'pending_add');
 

@@ -50,4 +50,12 @@ class User extends Authenticatable implements PasskeyUser
             'notification_preferences' => 'array',
         ];
     }
+
+        /**
+     * Un utilisateur est lié à un employé
+     */
+    public function employee(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
 }

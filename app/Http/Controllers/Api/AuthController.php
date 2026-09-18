@@ -50,7 +50,7 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first()->load('roles');
 
         if(!$user || !Hash::check($request->password, $user->password)){
             throw ValidationException::withMessages([
@@ -70,8 +70,15 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'message' => 'Connexion réussie',
             'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
+                'is_admin' => $user->hasRole('admin'),
+            ]
         ], 200);
     }
 
@@ -87,9 +94,17 @@ class AuthController extends Controller
     /**
      * Récupérer l'utilisateur connecté
      */
-    public function user(Request $request)
+        public function user(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user()->load('roles');
+        
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
+            'is_admin' => $user->hasRole('admin'), 
+        ]);
     }
 
 }

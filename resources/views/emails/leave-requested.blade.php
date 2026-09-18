@@ -14,8 +14,8 @@
         
         <div style="background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Type de congé :</strong> {{ $leave->leave_type }}</p>
-            <p><strong>Du :</strong> {{ $leave->start_date->format('d/m/Y') }}</p>
-            <p><strong>Au :</strong> {{ $leave->end_date->format('d/m/Y') }}</p>
+            <p><strong>Du :</strong> {{ \Carbon\Carbon::parse($leave->start_date)->format('d/m/Y') }}</p>
+            <p><strong>Au :</strong> {{ \Carbon\Carbon::parse($leave->end_date)->format('d/m/Y') }}</p>
             <p><strong>Durée :</strong> {{ $leave->days_count }} jour(s)</p>
             @if($leave->reason)
                 <p><strong>Motif :</strong> {{ $leave->reason }}</p>

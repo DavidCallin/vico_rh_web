@@ -79,6 +79,9 @@ class AbsenceController extends Controller
             'pay_period_id' => $payPeriod?->id,
         ]);
 
+            app(\App\Services\NotificationService::class)->notifyNewAbsenceRequest($absence);
+
+
         return new AbsenceResource($absence->load(['employee', 'payPeriod']));
     }
 

@@ -66,6 +66,12 @@ class PayslipController extends Controller
     public function download(Payslip $payslip)
     {
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
+        
+        if (in_array($payslip->payPeriod->status, ['break', 'closed', 'archived'])) {
+            return response()->json([
+                'message' => 'Impossible de télécharger ce bulletin : la période est verrouillée.'
+            ], 403);
+        }
 
         $template = PayslipTemplate::where('is_default', true)->first() 
                     ?? PayslipTemplate::first();
@@ -162,9 +168,9 @@ class PayslipController extends Controller
         $employee = Employee::findOrFail($request->employee_id);
         $period = PayPeriod::findOrFail($request->pay_period_id);
 
-        if ($period->status === 'closed' || $period->status === 'archived') {
+        if ($period->status === 'closed' || $period->status === 'archived' || $period->status === 'break') {
             return response()->json([
-                'message' => 'Impossible de générer un bulletin sur une période clôturée.',
+                'message' => 'Impossible de générer un bulletin sur une période verrouillée.',
             ], 400);
         }
 
@@ -217,5 +223,28 @@ class PayslipController extends Controller
         ]);
 
         return new PayslipResource($payslip);
+    }
+
+        /**
+     * Téléchargement du bulletin via le lien signé de l'email
+     */
+    public function downloadSigned(\App\Models\Payslip $payslip)
+    {
+        // ⚠️ Adapte cette partie selon ta logique de génération PDF (ex: DomPDF, Browsershot, ou fichier existant)
+        $fileName = "bulletin_{$payslip->employee->matricule}_{$payslip->payPeriod->month}_{$payslip->payPeriod->year}.pdf";
+        
+        // Exemple si tu as déjà le fichier stocké :
+        // return response()->download(storage_path('app/public/payslips/' . $payslip->file_path), $fileName);
+
+        // Exemple si tu génères le PDF à la volée (avec DomPDF par exemple) :
+        // $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.payslip', ['payslip' => $payslip]);
+        // return $pdf->download($fileName);
+
+        // 👇 EN ATTENDANT, on retourne les données JSON pour tester le lien
+        return response()->json([
+            'message' => 'Lien valide ! Le téléchargement du PDF serait déclenché ici.',
+            'payslip_id' => $payslip->id,
+            'employee' => $payslip->employee->full_name,
+        ]);
     }
 }

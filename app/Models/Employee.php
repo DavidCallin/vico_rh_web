@@ -119,7 +119,7 @@ class Employee extends Model
     // Scope pour récupérer uniquement les employés actifs
     public function scopeActive($query)
     {
-        return $query->where('status', 'actif');
+        return $query->where('status', 'active');
     }
 
     // Scope pour récupérer les employés en période d'essai

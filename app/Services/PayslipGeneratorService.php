@@ -7,16 +7,13 @@ use App\Models\PayPeriod;
 use App\Models\PayrollItem;
 use App\Models\Payslip;
 use App\Models\PayslipLine;
+use App\Models\PayslipTemplate;
 use Illuminate\Support\Facades\DB;
 
 class PayslipGeneratorService
 {
-    /**
-     * Génère le bulletin de paie d'un employé pour une période donnée
-     */
     public function generate(Employee $employee, PayPeriod $period): Payslip
     {
-        // Vérifier qu'un bulletin n'existe pas déjà
         $existing = Payslip::where('employee_id', $employee->id)
             ->where('pay_period_id', $period->id)
             ->first();
@@ -24,7 +21,6 @@ class PayslipGeneratorService
             throw new \Exception('Un bulletin existe déjà pour cet employé sur cette période.');
         }
 
-        // Récupérer le contrat actif de l'employé
         $contract = $employee->contracts()
             ->where('start_date', '<=', $period->closing_date ?? now())
             ->where(function ($q) use ($period) {
@@ -41,13 +37,26 @@ class PayslipGeneratorService
         $baseSalary = $contract->base_salary;
         $totalEarnings = 0;
         $totalDeductions = 0;
-        $taxableGross = 0; // ✅ NOUVEAU : Brut imposable
+        $taxableGross = 0;
         $lines = [];
 
-        // Récupérer toutes les rubriques actives
-        $payrollItems = PayrollItem::where('isActive', true)
-            ->orderBy('displayOrder', 'asc')
-            ->get();
+        // ✅ NOUVEAU : Récupérer le template par défaut
+        $template = PayslipTemplate::where('is_default', true)->first() 
+                    ?? PayslipTemplate::first();
+
+        // ✅ NOUVEAU : Récupérer les rubriques selon le template
+        if ($template && $template->payrollItems()->exists()) {
+            // Utiliser les rubriques spécifiques au template (avec pivot isActive)
+            $payrollItems = $template->payrollItems()
+                ->wherePivot('isActive', true)
+                ->orderBy('payslip_template_items.displayOrder', 'asc')
+                ->get();
+        } else {
+            // Fallback : utiliser toutes les rubriques actives
+            $payrollItems = PayrollItem::where('isActive', true)
+                ->orderBy('displayOrder', 'asc')
+                ->get();
+        }
 
         foreach ($payrollItems as $item) {
             $amount = $this->calculateAmount($item, $baseSalary);
@@ -61,8 +70,7 @@ class PayslipGeneratorService
 
             if ($item->type === 'gain') {
                 $totalEarnings += $amount;
-                
-                // ✅ NOUVEAU : Calculer le brut imposable
+                // ✅ NOUVEAU : Calcul du brut imposable
                 if ($item->taxStatus === 'taxable') {
                     $taxableGross += $amount;
                 }
@@ -71,7 +79,6 @@ class PayslipGeneratorService
             }
         }
 
-        // Créer le bulletin dans une transaction (tout ou rien)
         return DB::transaction(function () use ($employee, $period, $baseSalary, $totalEarnings, $totalDeductions, $taxableGross, $lines) {
             $payslipData = [
                 'employee_id' => $employee->id,
@@ -84,14 +91,12 @@ class PayslipGeneratorService
                 'status' => 'draft',
             ];
 
-            // ✅ NOUVEAU : Ajouter le brut imposable si la colonne existe
             if (\Illuminate\Support\Facades\Schema::hasColumn('payslips', 'taxable_gross')) {
                 $payslipData['taxable_gross'] = $taxableGross;
             }
 
             $payslip = Payslip::create($payslipData);
 
-            // Créer les lignes du bulletin
             foreach ($lines as $line) {
                 PayslipLine::create([
                     'payslip_id' => $payslip->id,
@@ -105,13 +110,8 @@ class PayslipGeneratorService
         });
     }
 
-    /**
-     * Calcule le montant d'une rubrique selon sa méthode de calcul
-     * Utilise defaultValue comme valeur de secours si amount_or_rate est null ou 0
-     */
     private function calculateAmount(PayrollItem $item, float $baseSalary): float
     {
-        // ✅ NOUVEAU : Utiliser defaultValue comme fallback
         $value = $item->amount_or_rate ?? $item->defaultValue ?? 0;
 
         return match ($item->calculation) {
@@ -122,21 +122,14 @@ class PayslipGeneratorService
         };
     }
 
-    /**
-     * Évalue une formule simple (ex: "base * 0.1 + default")
-     * Supporte maintenant la variable 'default' pour utiliser defaultValue
-     */
     private function evaluateFormula(string $formula, float $baseSalary, ?float $defaultValue = null): float
     {
-        // Remplace les variables par leurs valeurs
         $formula = str_replace('base', (string) $baseSalary, $formula);
         
-        // ✅ NOUVEAU : Remplacer 'default' par la valeur par défaut si elle existe
         if ($defaultValue !== null) {
             $formula = str_replace('default', (string) $defaultValue, $formula);
         }
 
-        // Sécurité : n'évaluer que les expressions mathématiques simples
         if (!preg_match('/^[\d\s\+\-\*\/\.\(\)]+$/', $formula)) {
             return 0;
         }
