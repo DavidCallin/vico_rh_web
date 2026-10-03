@@ -16,10 +16,10 @@ return new class extends Migration
             $table->string('type');           // Ex: CIN, Diplôme, RIB, CV...
             $table->string('file_path');      // Chemin vers le fichier stocké
             $table->date('added_date');
-            
+
             // FK vers employees
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            
+
             $table->timestamps();
         });
     }

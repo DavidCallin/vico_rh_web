@@ -18,19 +18,19 @@ return new class extends Migration
             $table->decimal('days_count', 5, 2); // Nombre de jours
             $table->decimal('balance_after', 5, 2); // Solde après ce mouvement
             $table->string('reason'); // Ex: "Dotation annuelle 2026", "Congé payé du 15 au 20 août"
-            
+
             // FK vers employees
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            
+
             // FK vers leaves - NULLABLE car un crédit initial n'est pas lié à un congé
             $table->unsignedBigInteger('leave_id')->nullable();
-            
+
             // FK vers pay_periods
             $table->foreignId('pay_period_id')->nullable()->constrained()->nullOnDelete();
-            
+
             $table->timestamps();
         });
-        
+
         // Ajout de la FK vers leaves (nullable)
         Schema::table('leave_balance_histories', function (Blueprint $table) {
             $table->foreign('leave_id')->references('id')->on('leaves')->nullOnDelete();

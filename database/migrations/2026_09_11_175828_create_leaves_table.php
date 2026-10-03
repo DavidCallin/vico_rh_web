@@ -20,19 +20,19 @@ return new class extends Migration
             $table->enum('status', ['pending', 'approved', 'rejected', 'cancelled'])->default('pending');
             $table->date('validation_date')->nullable();
             $table->text('reason')->nullable();
-            
+
             // FK vers employees (demandeur)
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            
+
             // FK réflexive vers employees (validateur) - nullable car pas encore validé
             $table->unsignedBigInteger('validator_id')->nullable();
-            
+
             // FK vers pay_periods
             $table->foreignId('pay_period_id')->nullable()->constrained()->nullOnDelete();
-            
+
             $table->timestamps();
         });
-        
+
         // Ajout de la FK réflexive après la création de la table
         Schema::table('leaves', function (Blueprint $table) {
             $table->foreign('validator_id')->references('id')->on('employees')->nullOnDelete();

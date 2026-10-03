@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payslips', function (Blueprint $table) { 
+        Schema::create('payslips', function (Blueprint $table) {
             $table->id();
             $table->date('generation_date');
             $table->decimal('gross_salary', 12, 2); // Salaire brut
@@ -20,13 +20,13 @@ return new class extends Migration
             $table->decimal('net_salary', 12, 2); // Salaire net
             $table->enum('status', ['draft', 'validated', 'paid'])->default('draft');
             $table->date('payment_date')->nullable();
-            
+
             // FK vers employees
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            
+
             // FK vers pay_periods
             $table->foreignId('pay_period_id')->constrained()->cascadeOnDelete();
-            
+
             $table->timestamps();
         });
     }

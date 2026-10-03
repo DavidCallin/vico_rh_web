@@ -18,10 +18,10 @@ return new class extends Migration
             $table->date('end_date')->nullable(); // Null pour CDI
             $table->decimal('base_salary', 10, 2);
             $table->string('pdf_path')->nullable(); // Chemin vers le PDF signé
-            
+
             // FK vers employees
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            
+
             $table->timestamps();
         });
     }

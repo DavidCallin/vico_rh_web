@@ -1,5 +1,15 @@
-import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    Bell,
+    BookOpen,
+    CalendarOff,
+    FileText,
+    FolderGit2,
+    LayoutGrid,
+    Palmtree,
+    ScrollText,
+    Wallet,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -16,13 +26,50 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+function navigation(unreadNotifications: number, isHr: boolean): NavItem[] {
+    const items: NavItem[] = [
+        {
+            title: 'Tableau de bord',
+            href: dashboard(),
+            icon: LayoutGrid,
+        },
+        {
+            title: 'Congés',
+            href: '/conges',
+            icon: Palmtree,
+        },
+        {
+            title: 'Absences',
+            href: '/absences',
+            icon: CalendarOff,
+        },
+        {
+            title: 'Paie',
+            href: '/paie',
+            icon: Wallet,
+        },
+        {
+            title: 'Bulletins',
+            href: '/bulletins',
+            icon: FileText,
+        },
+        {
+            title: 'Contrats',
+            href: '/contrats',
+            icon: ScrollText,
+        },
+        {
+            title:
+                unreadNotifications > 0
+                    ? `Notifications (${unreadNotifications})`
+                    : 'Notifications',
+            href: '/notifications',
+            icon: Bell,
+        },
+    ];
+
+    return isHr ? items : items.filter((item) => item.href !== '/paie');
+}
 
 const footerNavItems: NavItem[] = [
     {
@@ -38,6 +85,9 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const { auth, unreadNotifications } = usePage().props;
+    const isHr = auth.user?.is_hr === true;
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -53,7 +103,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={navigation(unreadNotifications, isHr)} />
             </SidebarContent>
 
             <SidebarFooter>

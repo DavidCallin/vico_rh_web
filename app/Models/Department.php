@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\DepartmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,31 +10,40 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Permission\Models\Role;
 
 class Department extends Model
 {
+    /** @use HasFactory<DepartmentFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     protected $fillable = ['name', 'description', 'code', 'manager_id'];
 
-    // Un département a plusieurs postes
+    /**
+     * @return HasMany<Position, $this>
+     */
     public function positions(): HasMany
     {
         return $this->hasMany(Position::class);
     }
 
-    //Un département à un responsable
+    /**
+     * @return BelongsTo<Employee, $this>
+     */
     public function manager(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'manager_id');
     }
 
-    //Un département peut avoir plusieurs rôle (table pivot)
+    /**
+     * @return BelongsToMany<Role, $this>
+     */
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(
-            \Spatie\Permission\Models\Role::class, 
+            Role::class,
             'role_department'
         );
     }

@@ -19,10 +19,10 @@ return new class extends Migration
             $table->date('opening_date');
             $table->date('closing_date')->nullable();
             $table->string('closure_type')->nullable();
-            
+
             // Qui a clôturé (users existe maintenant)
             $table->foreignId('closed_by')->nullable()->constrained('users')->nullOnDelete();
-            
+
             $table->timestamps();
             $table->unique(['month', 'year']);
         });

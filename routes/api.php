@@ -28,6 +28,13 @@ Route::get('/payslips/{payslip}/download-signed', [PayslipController::class, 'do
 // ==========================================
 Route::middleware('auth:sanctum')->group(function () {
 
+// Routes protégées par authentification
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/user', [AuthController::class, 'user']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Routes employés
+    Route::apiResource('employees', EmployeeController::class);
     // --- Auth ---
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);

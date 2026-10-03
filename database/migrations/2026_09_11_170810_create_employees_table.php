@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('employees', function (Blueprint $table) {
             $table->id();
 
-            //Identité
+            // Identité
             $table->string('matricule')->unique();
             $table->string('first_name');
             $table->string('last_name');
@@ -24,15 +24,14 @@ return new class extends Migration
             $table->string('email')->nullable();
             $table->text('address')->nullable();
 
-            //Professionnel
+            // Professionnel
             $table->date('hire_date');
             $table->string('site')->nullable();
             $table->enum('status', ['active', 'resigned', 'terminated', 'trial'])->default('trial');
 
-            //Relations metier
-            $table->foreignId('position_id')->contrained()->cascadeOnDelete();
+            // Relations metier
+            $table->foreignId('position_id')->constrained()->cascadeOnDelete();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
-
 
             $table->timestamps();
             $table->softDeletes();

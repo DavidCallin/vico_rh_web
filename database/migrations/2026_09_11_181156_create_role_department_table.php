@@ -11,13 +11,13 @@ return new class extends Migration
         Schema::create('role_department', function (Blueprint $table) {
             // FK vers roles (table créée par Spatie)
             $table->foreignId('role_id')->constrained()->cascadeOnDelete();
-            
+
             // FK vers departments
             $table->foreignId('department_id')->constrained()->cascadeOnDelete();
-            
+
             // Clé primaire composite
             $table->primary(['role_id', 'department_id']);
-            
+
             $table->timestamps();
         });
     }

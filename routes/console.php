@@ -9,6 +9,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('contracts:remind')->daily();
 // Exécuter la vérification des contrats tous les jours à 08h00
 Schedule::command('contracts:check-expiring')->dailyAt('08:00');
 

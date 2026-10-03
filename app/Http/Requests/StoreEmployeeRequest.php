@@ -26,6 +26,7 @@ class StoreEmployeeRequest extends FormRequest
             'matricule' => 'required|string|max:20|unique:employees,matricule',
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
+            'email' => 'required|email|unique:employees,email',
             'email' => 'required|string|unique:employees,email|unique:users,email',
             'phone' => 'nullable|string|max:20',
             'birth_date' => 'nullable|date|before:today',
@@ -33,9 +34,9 @@ class StoreEmployeeRequest extends FormRequest
             'address' => 'nullable|string|max:255',
             'hire_date' => 'required|date|before_or_equal:today',
             'site' => 'nullable|string|max:100',
-            'status' => 'required|in:active,on_leave,terminated,trial',
+            'status' => 'required|in:active,resigned,terminated,trial',
             'position_id' => 'required|exists:positions,id',
-            'category_id' => 'required|exists:categories,id'
+            'category_id' => 'required|exists:categories,id',
         ];
     }
 
