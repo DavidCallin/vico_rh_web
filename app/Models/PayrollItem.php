@@ -13,20 +13,26 @@ class PayrollItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name', 'code', 'type', 'amount_or_rate',
-        'calculation', 'is_active',
+        'name', 
+        'code', 
+        'type', 
+        'taxStatus',
+        'amount_or_rate', 
+        'defaultValue',    
+        'calculation', 
+        'isActive', 
+        'displayOrder',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
-        'amount_or_rate' => 'decimal:2',
+        'amount_or_rate' => 'decimal:4',
+        'defaultValue' => 'decimal:4',  
+        'isActive' => 'boolean',
+        'displayOrder' => 'integer',
     ];
 
-    /**
-     * @return HasMany<PayslipLine, $this>
-     */
     public function payslipLines(): HasMany
     {
-        return $this->hasMany(PayslipLine::class);
+        return $this->hasMany(PayslipLine::class, 'payroll_item_id');
     }
 }

@@ -29,4 +29,12 @@ class Category extends Model
     {
         return $this->hasMany(Employee::class);
     }
+
+    /**
+     * Relation avec les templates de bulletins
+     */
+    public function payslipTemplates(): HasMany
+    {
+        return $this->hasMany(PayslipTemplate::class);
+    }
 }

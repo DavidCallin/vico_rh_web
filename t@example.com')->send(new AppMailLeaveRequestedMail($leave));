@@ -1,0 +1,15 @@
+[90m= [39m[34;4mApp\Models\Leave[39;24m {#8388
+    [34mid[39m: [35m1[39m,
+    [34mleave_type[39m: [32m"[39m[32mother[39m[32m"[39m,
+    [34mstart_date[39m: [32m"[39m[32m2026-02-09[39m[32m"[39m,
+    [34mend_date[39m: [32m"[39m[32m2026-02-23[39m[32m"[39m,
+    [34mdays_count[39m: [32m"[39m[32m9.70[39m[32m"[39m,
+    [34mstatus[39m: [32m"[39m[32mapproved[39m[32m"[39m,
+    [34mvalidation_date[39m: [36mnull[39m,
+    [34mreason[39m: [32m"[39m[32mQuas amet libero voluptate voluptas id.[39m[32m"[39m,
+    [34memployee_id[39m: [35m8[39m,
+    [34mvalidator_id[39m: [36mnull[39m,
+    [34mpay_period_id[39m: [36mnull[39m,
+    [34mcreated_at[39m: [32m"[39m[32m2026-09-15 21:57:26[39m[32m"[39m,
+    [34mupdated_at[39m: [32m"[39m[32m2026-09-15 21:57:26[39m[32m"[39m,
+  }

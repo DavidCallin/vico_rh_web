@@ -53,13 +53,15 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants fournis sont incorrects.'],
             ]);
         }
 
-        if ($user->status !== 'active') {
+        $user->load('roles');
+
+        if($user->status !== 'active') {
             throw ValidationException::withMessages([
                 'email' => ['Votre compte est inactif. Veuillez contacter l\'administrateur.'],
             ]);
@@ -71,8 +73,15 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'message' => 'Connexion réussie',
             'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
+                'is_admin' => $user->hasRole('admin'),
+            ]
         ], 200);
     }
 
@@ -89,8 +98,16 @@ class AuthController extends Controller
     /**
      * Récupérer l'utilisateur connecté
      */
-    public function user(Request $request): JsonResponse
+        public function user(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user()->load('roles');
+
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
+            'is_admin' => $user->hasRole('admin'),
+        ]);
     }
 }

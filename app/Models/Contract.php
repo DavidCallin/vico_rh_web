@@ -15,7 +15,6 @@ class Contract extends Model
     protected $fillable = [
         'contract_type', 'start_date', 'end_date',
         'base_salary', 'pdf_path', 'employee_id',
-        'reminder_stage', 'last_reminded_at',
     ];
 
     protected $casts = [

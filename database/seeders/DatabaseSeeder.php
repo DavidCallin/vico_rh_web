@@ -50,17 +50,20 @@ class DatabaseSeeder extends Seeder
 
         // 6. Utilisateurs (10 employés uniques)
         $employeesForUsers = $employees->random(10);
+        $users = collect(); // ← Initialiser une collection vide
+        
         foreach ($employeesForUsers as $employee) {
-            User::factory()->create([
+            $user = User::factory()->create([
                 'employee_id' => $employee->id,
                 'name' => $employee->first_name.' '.$employee->last_name,
                 'email' => $employee->email,
                 'login' => Str::slug($employee->first_name.' '.$employee->last_name).'.'.$employee->id,
             ]);
+            $users->push($user); // ← Ajouter l'utilisateur à la collection
         }
         $this->command->info('✅ 10 utilisateurs créés');
 
-        // 7. Périodes de paie (SÉQUENTIELLES - PAS DE FACTORY ICI)
+        // 7. Périodes de paie
         for ($month = 1; $month <= 12; $month++) {
             PayPeriod::create([
                 'month' => $month,
@@ -78,19 +81,32 @@ class DatabaseSeeder extends Seeder
         $payrollItems = PayrollItem::factory(10)->create();
         $this->command->info('✅ 10 rubriques de paie créées');
 
-        // 9. Contrats (1 par employé)
+        // 9. Contrats
         $employees->each(function ($employee) {
             Contract::factory()->create(['employee_id' => $employee->id]);
         });
         $this->command->info('✅ 30 contrats créés');
 
-        // 10. Congés (50 au total, répartis aléatoirement)
+        // 10. Congés
         Leave::factory(50)->create([
             'employee_id' => fn () => $employees->random()->id,
         ]);
         $this->command->info('✅ 50 congés créés');
 
-        $this->seedDemo();
+        // 11. Rôles et Permissions (via le seeder dédié)
+        $this->call(RolesAndPermissionsSeeder::class);
+        $this->command->info('✅ Rôles et permissions créés');
+
+        // 12. Assigner des rôles aux utilisateurs
+        $users[0]->assignRole('admin');
+        $users->slice(1, 3)->each->assignRole('rh');
+        $users->slice(4, 6)->each->assignRole('manager');
+        $users->slice(7)->each->assignRole('employee');
+        $this->command->info('✅ Rôles assignés aux utilisateurs');
+
+        // 13. Settings par défaut
+        $this->call(SettingsSeeder::class);
+        $this->command->info('✅ Settings par défaut créés');
 
         $this->command->info('🎉 Base de données peuplée avec succès !');
     }

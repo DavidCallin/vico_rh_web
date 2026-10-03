@@ -45,6 +45,6 @@ class Absence extends Model
      */
     public function payPeriod(): BelongsTo
     {
-        return $this->belongsTo(PayPeriod::class);
+        return $this->belongsTo(PayPeriod::class, 'pay_period_id');
     }
 }
