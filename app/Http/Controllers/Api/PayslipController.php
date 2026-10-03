@@ -13,6 +13,7 @@ use App\Services\PayslipGeneratorService;
 use Illuminate\Http\Request;
 use App\Mail\PayslipAvailableMail;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema; // ✅ CORRECTION : Import de Schema
@@ -32,7 +33,12 @@ class PayslipController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
         $query = Payslip::with(['employee', 'payPeriod', 'lines.payrollItem']);
+
+        if ($user && $user->hasRole('employee')) {
+            $query->where('employee_id', $user->employee_id);
+        }
 
         if ($request->has('pay_period_id')) {
             $query->where('pay_period_id', $request->pay_period_id);
@@ -56,6 +62,12 @@ class PayslipController extends Controller
      */
     public function show(Payslip $payslip)
     {
+        $user = Auth::user();
+
+        if ($user && $user->hasRole('employee') && $payslip->employee_id !== $user->employee_id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
         return new PayslipResource($payslip);
     }
@@ -65,15 +77,21 @@ class PayslipController extends Controller
      */
     public function download(Payslip $payslip)
     {
+        $user = Auth::user();
+
+        if ($user && $user->hasRole('employee') && $payslip->employee_id !== $user->employee_id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
-        
-        if (in_array($payslip->payPeriod->status, ['break', 'closed', 'archived'])) {
+
+        if (in_array($payslip->payPeriod->status, ['break', 'archived'])) {
             return response()->json([
                 'message' => 'Impossible de télécharger ce bulletin : la période est verrouillée.'
             ], 403);
         }
 
-        $template = PayslipTemplate::where('is_default', true)->first() 
+        $template = PayslipTemplate::where('is_default', true)->first()
                     ?? PayslipTemplate::first();
 
         if (!$template) {
@@ -82,20 +100,19 @@ class PayslipController extends Controller
 
         $employee = $payslip->employee;
         $period = $payslip->payPeriod;
-        
+
         // 1. Récupérer le solde de congé
         $currentYear = now()->year;
         $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)
             ->where('year', $currentYear)
             ->first();
-        
+
         $leavesTaken = $leaveBalance ? $leaveBalance->taken_days : 0;
         $leavesRemaining = $leaveBalance ? $leaveBalance->remaining_days : 0;
 
         // 2. Regrouper les lignes par type
-        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'earning');
+        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'gain');
         $deductionLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'deduction');
-
         $totalEarnings = $earningLines->sum('amount');
         $totalDeductions = $deductionLines->sum('amount');
 
@@ -122,7 +139,7 @@ class PayslipController extends Controller
         $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
         $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
         $htmlContent = str_replace('{{period}}', $period->label ?? $period->month . '/' . $period->year, $htmlContent);
-        
+
         // Variables de congé
         $htmlContent = str_replace('{{leaves_taken}}', number_format($leavesTaken, 2, ',', ' '), $htmlContent);
         $htmlContent = str_replace('{{leaves_remaining}}', number_format($leavesRemaining, 2, ',', ' '), $htmlContent);
@@ -131,12 +148,13 @@ class PayslipController extends Controller
         $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
-        
+
         // Injection des tableaux de lignes
         $htmlContent = str_replace('{{earnings_lines}}', $earningsHtml, $htmlContent);
         $htmlContent = str_replace('{{deductions_lines}}', $deductionsHtml, $htmlContent);
 
         // 6. Générer le PDF
+
         $pdf = Pdf::loadHTML($htmlContent)
                   ->setPaper('a4', 'portrait')
                   ->setOption('margin-top', 10)
@@ -145,7 +163,7 @@ class PayslipController extends Controller
         // 7. Sauvegarder le fichier (avec padding du mois pour avoir "09" au lieu de "9")
         $monthPadded = str_pad($period->month, 2, '0', STR_PAD_LEFT);
         $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $period->year . '_' . $monthPadded . '.pdf';
-        
+
         if (Schema::hasColumn('payslips', 'file_path')) {
             Storage::disk('public')->put($fileName, $pdf->output());
             $payslip->update(['file_path' => $fileName]);
@@ -230,21 +248,15 @@ class PayslipController extends Controller
      */
     public function downloadSigned(\App\Models\Payslip $payslip)
     {
-        // ⚠️ Adapte cette partie selon ta logique de génération PDF (ex: DomPDF, Browsershot, ou fichier existant)
-        $fileName = "bulletin_{$payslip->employee->matricule}_{$payslip->payPeriod->month}_{$payslip->payPeriod->year}.pdf";
-        
-        // Exemple si tu as déjà le fichier stocké :
-        // return response()->download(storage_path('app/public/payslips/' . $payslip->file_path), $fileName);
+        $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
 
-        // Exemple si tu génères le PDF à la volée (avec DomPDF par exemple) :
-        // $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.payslip', ['payslip' => $payslip]);
-        // return $pdf->download($fileName);
+        $monthPadded = str_pad((string) $payslip->payPeriod->month, 2, '0', STR_PAD_LEFT);
+        $downloadFileName = 'Bulletin_' . $payslip->employee->matricule . '_' . $monthPadded . '_' . $payslip->payPeriod->year . '.pdf';
 
-        // 👇 EN ATTENDANT, on retourne les données JSON pour tester le lien
-        return response()->json([
-            'message' => 'Lien valide ! Le téléchargement du PDF serait déclenché ici.',
-            'payslip_id' => $payslip->id,
-            'employee' => $payslip->employee->full_name,
-        ]);
+        if (!empty($payslip->file_path) && Storage::disk('public')->exists($payslip->file_path)) {
+            return Storage::disk('public')->download($payslip->file_path, $downloadFileName);
+        }
+
+        return $this->download($payslip);
     }
 }

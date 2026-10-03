@@ -55,7 +55,7 @@ class AbsenceController extends Controller
     public function store(StoreAbsenceRequest $request)
     {
         $user = Auth::user();
-        
+
         // Upload du justificatif si fourni
         $proofPath = null;
         if ($request->hasFile('proof')) {
@@ -90,6 +90,12 @@ class AbsenceController extends Controller
      */
     public function show(Absence $absence)
     {
+        $user = Auth::user();
+
+        if ($user->hasRole('employee') && $absence->employee_id !== $user->employee_id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $absence->load(['employee.position.department', 'validator']);
         return new AbsenceResource($absence);
     }

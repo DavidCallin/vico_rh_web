@@ -50,13 +50,15 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first()->load('roles');
+        $user = User::where('email', $request->email)->first();
 
-        if(!$user || !Hash::check($request->password, $user->password)){
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants fournis sont incorrects.'],
             ]);
         }
+
+        $user->load('roles');
 
         if($user->status !== 'active') {
             throw ValidationException::withMessages([
@@ -97,13 +99,13 @@ class AuthController extends Controller
         public function user(Request $request)
     {
         $user = $request->user()->load('roles');
-        
+
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'roles' => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
-            'is_admin' => $user->hasRole('admin'), 
+            'is_admin' => $user->hasRole('admin'),
         ]);
     }
 

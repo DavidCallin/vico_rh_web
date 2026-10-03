@@ -21,11 +21,13 @@ class DashboardController extends Controller
         $totalEmployees = Employee::count();
         $activeEmployees = Employee::where('status', 'active')->count();
         $trialEmployees = Employee::where('status', 'trial')->count();
-        $onLeaveEmployees = Employee::where('status', 'on_leave')->count();
+        // Le statut `on_leave` n'existe pas dans l'enum actuel de la table employees.
+        // On mappe cet indicateur aux employés non actifs (démissionnés/terminés).
+        $onLeaveEmployees = Employee::whereIn('status', ['resigned', 'terminated'])->count();
 
         // 2. ALERTES ET TÂCHES EN ATTENTE
         $pendingLeavesCount = Leave::where('status', 'pending')->count();
-        
+
         // Contrats expirant dans les 30 prochains jours
         $expiringContractsCount = Contract::whereBetween('end_date', [
             now()->toDateString(),
@@ -44,11 +46,16 @@ class DashboardController extends Controller
             ->get();
 
         // 4. PÉRIODE DE PAIE EN COURS
-        $currentPayPeriod = PayPeriod::where('year', now()->year)
-            ->where('month', now()->month)
-            ->first();
+        // Priorité à la période réellement ouverte, sinon fallback sur la période du mois courant.
+        $currentPayPeriod = PayPeriod::where('status', 'open')
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->first()
+            ?? PayPeriod::where('year', now()->year)
+                ->where('month', now()->month)
+                ->first();
 
-        $currentPayPeriodLabel = $currentPayPeriod 
+        $currentPayPeriodLabel = $currentPayPeriod
             ? \Carbon\Carbon::create($currentPayPeriod->year, $currentPayPeriod->month, 1)->translatedFormat('F Y')
             : 'Aucune période ouverte';
 
@@ -59,6 +66,7 @@ class DashboardController extends Controller
                 'active_employees' => $activeEmployees,
                 'trial_employees' => $trialEmployees,
                 'on_leave_employees' => $onLeaveEmployees,
+                'employees_inactive_or_other' => max(0, $totalEmployees - ($activeEmployees + $trialEmployees + $onLeaveEmployees)),
                 'pending_leaves' => $pendingLeavesCount,
                 'expiring_contracts_30d' => $expiringContractsCount,
             ],

@@ -19,16 +19,19 @@ use Illuminate\Support\Facades\Route;
 // ==========================================
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/payslips/{payslip}/download-signed', [PayslipController::class, 'downloadSigned'])
+    ->middleware('signed')
+    ->name('payslip.download');
 
 // ==========================================
 // 2. ROUTES PROTÉGÉES (Authentification requise)
 // ==========================================
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     // --- Auth ---
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
-    
+
     // ==========================================
     // 3. ROUTES MÉTIER
     // ==========================================
@@ -56,7 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::middleware('can:leaves.create')->group(function () {
         Route::post('/leaves', [LeaveController::class, 'store']);
-        Route::delete('/leaves/{leave}', [LeaveController::class, 'destroy']); 
+        Route::delete('/leaves/{leave}', [LeaveController::class, 'destroy']);
     });
     Route::middleware('can:leaves.approve')->group(function () {
         Route::patch('/leaves/{leave}/status', [LeaveController::class, 'updateStatus']);
@@ -97,7 +100,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/pay-periods/status', function () {
         // ✅ Cherche explicitement la période ouverte (il ne devrait y en avoir qu'une seule)
         $openPeriod = \App\Models\PayPeriod::where('status', 'open')->first();
-        
+
         // ✅ Sécurité : s'il y en a plusieurs, on ne garde que la plus récente
         if (!$openPeriod) {
             $openPeriod = \App\Models\PayPeriod::where('status', 'open')
@@ -105,13 +108,13 @@ Route::middleware('auth:sanctum')->group(function () {
                 ->orderBy('month', 'desc')
                 ->first();
         }
-        
+
         return response()->json([
             'has_open_period' => $openPeriod !== null,
             'open_period' => $openPeriod ? new \App\Http\Resources\PayPeriodResource($openPeriod) : null,
         ]);
     });
-        
+
         Route::get('/pay-periods', [PayPeriodController::class, 'index']);
         Route::get('/pay-periods/{payPeriod}', [PayPeriodController::class, 'show']);
     });
@@ -143,7 +146,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/payslips/{payslip}', [PayslipController::class, 'show']);
         Route::get('/payslips/{payslip}/download', [PayslipController::class, 'download']);
     });
-    
+
     Route::middleware('can:payroll.manage')->group(function () {
         Route::post('/payslips/generate', [PayslipController::class, 'generate']);
         Route::patch('/payslips/{payslip}/validate', [PayslipController::class, 'validate']); // PATCH au lieu de POST
@@ -268,7 +271,7 @@ Route::middleware('auth:sanctum')->group(function () {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
-            'category_id' => 'nullable|exists:categories,id', 
+            'category_id' => 'nullable|exists:categories,id',
         ]);
         $position = \App\Models\Position::create($validated);
         return response()->json(['message' => 'Poste créé.', 'data' => $position->load(['department', 'category'])], 201);
@@ -278,7 +281,7 @@ Route::middleware('auth:sanctum')->group(function () {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'department_id' => 'required|exists:departments,id',
-            'category_id' => 'nullable|exists:categories,id', 
+            'category_id' => 'nullable|exists:categories,id',
         ]);
         $position->update($validated);
         return response()->json(['message' => 'Poste mis à jour.', 'data' => $position->load(['department', 'category'])]);
@@ -372,7 +375,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard/pending-requests', function () {
             $pendingLeaves = \App\Models\Leave::where('status', 'pending')->count();
             $pendingAbsences = \App\Models\Absence::where('status', 'pending')->count();
-            
+
             return response()->json([
                 'pending_leaves' => $pendingLeaves,
                 'pending_absences' => $pendingAbsences,
@@ -382,7 +385,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard/expiring-contracts', function () {
             $warningDays = \App\Models\Setting::get('contract_expiry_warning_days', 30);
             $today = \Carbon\Carbon::today();
-            
+
             $contracts = \App\Models\Contract::whereNotNull('end_date')
                 ->where('end_date', '>=', $today)
                 ->where('end_date', '<=', $today->copy()->addDays($warningDays))
@@ -396,13 +399,13 @@ Route::middleware('auth:sanctum')->group(function () {
                     'end_date' => $c->end_date,
                     'days_remaining' => $today->diffInDays(\Carbon\Carbon::parse($c->end_date)),
                 ]);
-            
+
             return response()->json(['data' => $contracts]);
         });
     });
 
     // ===== L. GESTION DES UTILISATEURS ET RÔLES =====
-    Route::middleware('can:manage.users')->prefix('admin')->group(function () {
+    Route::middleware('can:users.manage')->prefix('admin')->group(function () {
         Route::get('/users', [\App\Http\Controllers\Api\UserController::class, 'index']);
         Route::post('/users', [\App\Http\Controllers\Api\UserController::class, 'store']);
         Route::put('/users/{user}', [\App\Http\Controllers\Api\UserController::class, 'update']);
@@ -412,11 +415,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
         // ===== M. SETTINGS (Lecture + Modification uniquement) =====
-    Route::middleware('can:manage.users')->group(function () {
+    Route::middleware('can:users.manage')->group(function () {
         // Lister tous les settings (groupés)
         Route::get('/settings', function () {
             $settings = \App\Models\Setting::orderBy('group')->orderBy('key')->get();
-            
+
             // Grouper par catégorie
             $grouped = $settings->groupBy('group')->map(function ($items, $group) {
                 return [
@@ -431,7 +434,7 @@ Route::middleware('auth:sanctum')->group(function () {
                     'settings' => $items,
                 ];
             })->values();
-            
+
             return response()->json(['data' => $grouped]);
         });
 
@@ -459,7 +462,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
         // ===== RÉINITIALISATION MOT DE PASSE (Admin uniquement) =====
-    Route::middleware('can:manage.users')->group(function () {
+    Route::middleware('can:users.manage')->group(function () {
         Route::post('/employees/{employee}/reset-password', function (\Illuminate\Http\Request $request, \App\Models\Employee $employee) {
             $user = $employee->user;
             if (!$user) {
@@ -490,9 +493,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ===== TÉLÉCHARGEMENT BULLETIN VIA LIEN EMAIL (URL Signée) =====
-    Route::get('/payslips/{payslip}/download', [\App\Http\Controllers\Api\PayslipController::class, 'downloadSigned'])
-    ->name('payslip.download')
-    ->middleware('signed'); // ✅ Sécurise le lien contre la falsification
+     // ✅ Sécurise le lien contre la falsification
 
 
 });

@@ -86,6 +86,12 @@ class LeaveController extends Controller
      */
     public function show(Leave $leave)
     {
+        $user = Auth::user();
+
+        if ($user->hasRole('employee') && $leave->employee_id !== $user->employee_id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $leave->load(['employee.position.department', 'validator', 'balanceHistories']);
         return new LeaveResource($leave);
     }
@@ -107,8 +113,8 @@ class LeaveController extends Controller
             'status' => $newStatus,
             'validation_date' => now(),
             'validator_id' => $user->employee_id,
-            'reason' => $newStatus === 'rejected' 
-                ? ($request->rejection_reason ?: $leave->reason) 
+            'reason' => $newStatus === 'rejected'
+                ? ($request->rejection_reason ?: $leave->reason)
                 : $leave->reason,
         ]);
 
@@ -129,8 +135,8 @@ class LeaveController extends Controller
             'leave_type' => $leave->leave_type,
             'change' => $newStatus === 'approved' ? -$leave->days_count : 0,
             'balance_after' => $currentBalance ? $currentBalance->remaining_days : 0, // ✅ Vrai solde calculé
-            'reason' => $newStatus === 'approved' 
-                ? "Congé approuvé (Demande #{$leave->id})" 
+            'reason' => $newStatus === 'approved'
+                ? "Congé approuvé (Demande #{$leave->id})"
                 : "Congé rejeté/annulé (Demande #{$leave->id})",
             'reference_id' => $leave->id,
             'reference_type' => 'leave',

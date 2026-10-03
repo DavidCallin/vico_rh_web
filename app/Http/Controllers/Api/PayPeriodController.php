@@ -109,9 +109,8 @@ class PayPeriodController extends Controller
         ], 201);
     }
 
-    /**
-     * 🎯 GÉNÉRER LES BULLETINS (SANS clôturer la période)
-     * Appelée par le bouton "Générer" du frontend
+        /**
+     * 🎯 GÉNÉRER ET CALCULER LES BULLETINS (Utilise le service existant)
      */
         public function generatePayslips(PayPeriod $payPeriod)
     {
@@ -134,111 +133,50 @@ class PayPeriodController extends Controller
             $deletedCount = \App\Models\Payslip::where('pay_period_id', $payPeriod->id)->delete();
             \Illuminate\Support\Facades\Log::info("🗑️ {$deletedCount} ancien(s) bulletin(s) et fichiers supprimés");
 
-            // 2. ✅ RÉCUPÉRER LE TEMPLATE PAR DÉFAUT (comme dans ta méthode download)
-            $template = \App\Models\PayslipTemplate::where('is_default', true)->first() 
-                        ?? \App\Models\PayslipTemplate::first();
-
-            if (!$template) {
-                return response()->json(['message' => 'Aucun template de bulletin configuré.'], 404);
-            }
-
-            // 3. ✅ GÉNÉRER LES NOUVEAUX BULLETINS + PDF
-            $employees = \App\Models\Employee::whereIn('status', ['active', 'trial'])
-                ->with('position', 'category')
+            // 2. ✅ RÉCUPÉRER LES EMPLOYÉS ACTIFS (comme dans processPayslipGeneration)
+            $employees = \App\Models\Employee::where('status', 'active')
+                ->whereHas('contracts', function ($query) use ($payPeriod) {
+                    $closingDate = $payPeriod->closing_date ?? now();
+                    $openingDate = $payPeriod->opening_date ?? now()->startOfMonth();
+                    $query->where('start_date', '<=', $closingDate)
+                        ->where(function ($q) use ($openingDate) {
+                            $q->whereNull('end_date')
+                                ->orWhere('end_date', '>=', $openingDate);
+                        });
+                })
+                ->with('user')
                 ->get();
-            
+
             \Illuminate\Support\Facades\Log::info("👥 {$employees->count()} employé(s) trouvé(s) pour la génération");
-            
+
             $generatedCount = 0;
             $errorCount = 0;
 
             foreach ($employees as $employee) {
                 try {
-                    $baseSalary = $employee->position ? ($employee->position->base_salary ?? 0) : 0;
+                    // ✅ UTILISER LE SERVICE (qui crée les PayslipLine)
+                    $payslip = $this->generator->generate($employee, $payPeriod);
 
-                    // A. Créer l'enregistrement en base
-                    $payslip = \App\Models\Payslip::create([
-                        'employee_id' => $employee->id,
-                        'pay_period_id' => $payPeriod->id,
-                        'gross_salary' => $baseSalary,
-                        'net_salary' => $baseSalary,
-                        'total_earnings' => $baseSalary,
-                        'total_deductions' => 0,
-                        'generation_date' => now(),
-                    ]);
-
-                    // B. Générer le PDF (Logique extraite de ta méthode download)
-                    $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
-                    
-                    $currentYear = now()->year;
-                    $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)->where('year', $currentYear)->first();
-                    $leavesTaken = $leaveBalance ? $leaveBalance->taken_days : 0;
-                    $leavesRemaining = $leaveBalance ? $leaveBalance->remaining_days : 0;
-
-                    $earningLines = $payslip->lines ? $payslip->lines->filter(fn($l) => $l->payrollItem && $l->payrollItem->type === 'earning') : collect();
-                    $deductionLines = $payslip->lines ? $payslip->lines->filter(fn($l) => $l->payrollItem && $l->payrollItem->type === 'deduction') : collect();
-
-                    $totalEarnings = $earningLines->sum('amount');
-                    $totalDeductions = $deductionLines->sum('amount');
-
-                    $earningsHtml = '';
-                    foreach ($earningLines as $line) {
-                        $amount = number_format($line->amount, 2, ',', ' ') . ' €';
-                        $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
-                        $earningsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>{$amount}</td></tr>";
-                    }
-                    $earningsHtml .= "<tr style='font-weight:bold; background-color:#f0f9ff;'><td>TOTAL GAINS</td><td style='text-align:right;'>" . number_format($totalEarnings, 2, ',', ' ') . " €</td></tr>";
-
-                    $deductionsHtml = '';
-                    foreach ($deductionLines as $line) {
-                        $amount = number_format($line->amount, 2, ',', ' ') . ' €';
-                        $desc = $line->description ? " <small style='color:#666'>({$line->description})</small>" : '';
-                        $deductionsHtml .= "<tr><td>{$line->payrollItem->name}{$desc}</td><td style='text-align:right;'>-{$amount}</td></tr>";
-                    }
-                    $deductionsHtml .= "<tr style='font-weight:bold; background-color:#fef2f2;'><td>TOTAL DÉDUCTIONS</td><td style='text-align:right;'>-" . number_format($totalDeductions, 2, ',', ' ') . " €</td></tr>";
-
-                    $htmlContent = $template->content;
-                    $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
-                    $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
-                    $htmlContent = str_replace('{{period}}', $payPeriod->label ?? ($payPeriod->month . '/' . $payPeriod->year), $htmlContent);
-                    $htmlContent = str_replace('{{leaves_taken}}', number_format($leavesTaken, 2, ',', ' '), $htmlContent);
-                    $htmlContent = str_replace('{{leaves_remaining}}', number_format($leavesRemaining, 2, ',', ' '), $htmlContent);
-                    $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
-                    $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
-                    $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
-                    $htmlContent = str_replace('{{earnings_lines}}', $earningsHtml, $htmlContent);
-                    $htmlContent = str_replace('{{deductions_lines}}', $deductionsHtml, $htmlContent);
-
-                    // Génération et sauvegarde du PDF
-                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent)
-                        ->setPaper('a4', 'portrait')
-                        ->setOption('margin-top', 10)
-                        ->setOption('margin-bottom', 10);
-
-                    $monthPadded = str_pad($payPeriod->month, 2, '0', STR_PAD_LEFT);
-                    $fileName = 'bulletins/bulletin_' . $employee->matricule . '_' . $payPeriod->year . '_' . $monthPadded . '.pdf';
-                    
-                    // ✅ SAUVEGARDE DANS LE STORAGE
-                    \Illuminate\Support\Facades\Storage::disk('public')->put($fileName, $pdf->output());
-                    $payslip->update(['file_path' => $fileName]);
+                    // ✅ GÉNÉRER LE PDF (avec les lignes maintenant créées)
+                    $this->generatePayslipPdf($payslip);
 
                     $generatedCount++;
                 } catch (\Throwable $e) {
                     $errorCount++;
-                    \Illuminate\Support\Facades\Log::error("❌ Erreur création bulletin pour employé {$employee->id} : " . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::error("❌ Erreur pour employé {$employee->id} ({$employee->full_name}) : " . $e->getMessage());
                 }
             }
 
             \Illuminate\Support\Facades\Log::info("✅ Génération terminée : {$generatedCount} créé(s), {$errorCount} erreur(s)");
 
             return response()->json([
-                'message' => "{$generatedCount} bulletin(s) généré(s) avec PDF." . ($errorCount > 0 ? " ({$errorCount} échec(s))." : ""),
+                'message' => "{$generatedCount} bulletin(s) calculé(s) et généré(s)." . ($errorCount > 0 ? " ({$errorCount} échec(s) voir logs)." : ""),
                 'generated_count' => $generatedCount,
                 'error_count' => $errorCount,
             ]);
 
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('❌ Erreur critique génération bulletins : ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('❌ Erreur critique : ' . $e->getMessage());
             return response()->json([
                 'message' => 'Erreur lors de la génération.',
                 'error' => config('app.debug') ? $e->getMessage() : null
@@ -277,12 +215,15 @@ class PayPeriodController extends Controller
                 }
 
                 try {
-                    // Générer le lien de téléchargement sécurisé (valable 30 jours)
-                    $downloadUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+                    // Générer le lien signé puis le projeter sur l'hôte réel de la requête
+                    // pour éviter des URLs localhost dans les emails en production.
+                    $signedRelativePath = \Illuminate\Support\Facades\URL::temporarySignedRoute(
                         'payslip.download',
                         now()->addDays(30),
-                        ['payslip' => $payslip->id]
+                        ['payslip' => $payslip->id],
+                        false
                     );
+                    $downloadUrl = rtrim(request()->getSchemeAndHttpHost(), '/') . $signedRelativePath;
 
                     // Construire le sujet personnalisé
                     $subjectTemplate = \App\Models\Setting::get('payslip_email_subject', 'Votre bulletin de paie du {month} {year}');
@@ -292,7 +233,7 @@ class PayPeriodController extends Controller
                         9 => 'septembre', 10 => 'octobre', 11 => 'novembre', 12 => 'décembre'
                     ];
                     $monthName = $monthNames[$payPeriod->month] ?? $payPeriod->month;
-                    
+
                     $subject = str_replace(
                         ['{month}', '{year}', '{employee_name}'],
                         [$monthName, $payPeriod->year, $employee->full_name],
@@ -318,7 +259,7 @@ class PayPeriodController extends Controller
             }
 
             return response()->json([
-                'message' => "{$emailSentCount} email(s) envoyé(s) avec succès." . 
+                'message' => "{$emailSentCount} email(s) envoyé(s) avec succès." .
                             ($emailFailedCount > 0 ? " {$emailFailedCount} échec(s)." : ""),
                 'emails_sent' => $emailSentCount,
                 'emails_failed' => $emailFailedCount,
@@ -500,7 +441,7 @@ class PayPeriodController extends Controller
             return;
         }
 
-        $template = \App\Models\PayslipTemplate::where('is_default', true)->first() 
+        $template = \App\Models\PayslipTemplate::where('is_default', true)->first()
                     ?? \App\Models\PayslipTemplate::first();
 
         if (!$template) {
@@ -508,21 +449,21 @@ class PayPeriodController extends Controller
         }
 
         $payslip->load(['employee', 'payPeriod', 'lines.payrollItem']);
-        
+
         $employee = $payslip->employee;
         $period = $payslip->payPeriod;
-        
+
         // 1. Récupérer le solde de congé de l'année en cours
         $currentYear = now()->year;
         $leaveBalance = \App\Models\LeaveBalance::where('employee_id', $employee->id)
             ->where('year', $currentYear)
             ->first();
-        
+
         $leavesTaken = $leaveBalance ? $leaveBalance->taken_days : 0;
         $leavesRemaining = $leaveBalance ? $leaveBalance->remaining_days : 0;
 
         // 2. Regrouper les lignes par type
-        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'earning');
+        $earningLines = $payslip->lines->filter(fn($l) => $l->payrollItem?->type === 'gain');
         $deductionLines = $payslip->lines->filter(fn($l) => $l->payrollItem->type === 'deduction');
 
         $totalEarnings = $earningLines->sum('amount');
@@ -551,7 +492,7 @@ class PayPeriodController extends Controller
         $htmlContent = str_replace('{{employee_name}}', $employee->full_name, $htmlContent);
         $htmlContent = str_replace('{{matricule}}', $employee->matricule, $htmlContent);
         $htmlContent = str_replace('{{period}}', $period->label ?? $period->month . '/' . $period->year, $htmlContent);
-        
+
         // Variables de congé
         $htmlContent = str_replace('{{leaves_taken}}', number_format($leavesTaken, 2, ',', ' '), $htmlContent);
         $htmlContent = str_replace('{{leaves_remaining}}', number_format($leavesRemaining, 2, ',', ' '), $htmlContent);
@@ -560,7 +501,7 @@ class PayPeriodController extends Controller
         $htmlContent = str_replace('{{gross_salary}}', number_format($payslip->gross_salary, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{deductions}}', number_format($payslip->total_deductions, 2, ',', ' ') . ' €', $htmlContent);
         $htmlContent = str_replace('{{net_salary}}', number_format($payslip->net_salary, 2, ',', ' ') . ' €', $htmlContent);
-        
+
         // Injection des tableaux de lignes
         $htmlContent = str_replace('{{earnings_lines}}', $earningsHtml, $htmlContent);
         $htmlContent = str_replace('{{deductions_lines}}', $deductionsHtml, $htmlContent);

@@ -12,7 +12,7 @@ class Payslip extends Model
     use HasFactory;
     protected $fillable = [
         'generation_date', 'gross_salary', 'total_earnings',
-        'total_deductions', 'net_salary', 'status', 'payment_date',
+        'total_deductions', 'net_salary', 'file_path', 'status', 'payment_date',
         'employee_id', 'pay_period_id'
     ];
 
