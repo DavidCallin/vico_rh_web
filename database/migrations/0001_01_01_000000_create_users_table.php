@@ -10,22 +10,22 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            
+
             // Champs Laravel par défaut
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
-            
+
             // Nos ajouts métier (SANS la FK employee_id pour l'instant)
-            $table->string('login')->unique(); 
+            $table->string('login')->unique();
             $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
             $table->timestamp('last_login_at')->nullable();
-            
+
             // On ajoute juste la colonne, PAS la contrainte FK
             $table->unsignedBigInteger('employee_id')->nullable()->unique();
-            
+
             $table->timestamps();
         });
 

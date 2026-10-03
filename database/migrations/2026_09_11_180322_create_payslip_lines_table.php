@@ -15,16 +15,17 @@ return new class extends Migration
             $table->id();
             $table->decimal('amount', 12, 2); // Montant de la ligne
             $table->decimal('quantity', 8, 2)->default(1); // Quantité (ex: heures, jours)
-            
+
             // FK vers payslips
             $table->foreignId('payslip_id')->constrained()->cascadeOnDelete();
-            
+
             // FK vers payroll_items (rubriques de paie)
             $table->foreignId('payroll_item_id')->constrained()->cascadeOnDelete();
-            
+
             $table->timestamps();
         });
     }
+
     /**
      * Reverse the migrations.
      */
