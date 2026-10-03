@@ -7,9 +7,14 @@ use App\Http\Requests\StoreEmployeeRequest;
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
@@ -64,93 +69,69 @@ class EmployeeController extends Controller
     {
         $employee = Employee::create($request->validated());
 
-        return new EmployeeResource($employee->load(['position.department', 'category']));
-        public function store(\App\Http\Requests\StoreEmployeeRequest $request)
-    {
-        try {
-            // 1. Récupérer les données validées
-            $validated = $request->validated();
+        $this->createUserForEmployee($employee);
 
-            // ✅ Valeur par défaut pour le statut
-            $validated['status'] = $validated['status'] ?? 'actif';
-
-            // 2. Créer l'employé
-            $employee = \App\Models\Employee::create($validated);
-
-            // 3. ✅ CRÉATION AUTOMATIQUE DU COMPTE UTILISATEUR
-            $this->createUserForEmployee($employee);
-
-            return response()->json([
-                'message' => 'Employé créé avec succès. Un compte utilisateur a été automatiquement généré.',
-                'data' => $employee->load(['position', 'category', 'user'])
-            ], 201);
-
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Erreur création employé : ' . $e->getMessage());
-            return response()->json([
-                'message' => 'Erreur lors de la création de l\'employé.',
-                'error' => config('app.debug') ? $e->getMessage() : null
-            ], 500);
-        }
+        return new EmployeeResource($employee->load(['position.department', 'category', 'user']));
     }
 
-        /**
-     * ✅ Crée automatiquement un compte utilisateur pour l'employé
+    /**
+     * Crée automatiquement un compte utilisateur pour l'employé
      */
     private function createUserForEmployee($employee): void
     {
-        \Illuminate\Support\Facades\Log::info("🔍 Début création compte utilisateur pour : {$employee->full_name}");
+        Log::info("🔍 Début création compte utilisateur pour : {$employee->full_name}");
 
         try {
             // 1. Vérifier si un utilisateur avec cet email existe déjà
-            $existingUser = \App\Models\User::where('email', $employee->email)->first();
-            
+            $existingUser = User::where('email', $employee->email)->first();
+
             if ($existingUser) {
-                \Illuminate\Support\Facades\Log::info("⚠️ Un utilisateur existe déjà avec cet email : {$employee->email}");
-                
-                if (!$existingUser->employee_id) {
+                Log::info("⚠️ Un utilisateur existe déjà avec cet email : {$employee->email}");
+
+                if (! $existingUser->employee_id) {
                     $existingUser->update([
                         'employee_id' => $employee->id,
                         'login' => $existingUser->login ?? $employee->email, // ✅ Sécurise le login
                     ]);
-                    \Illuminate\Support\Facades\Log::info("✅ Utilisateur existant lié à l'employé {$employee->full_name}");
+                    Log::info("✅ Utilisateur existant lié à l'employé {$employee->full_name}");
                 }
+
                 return;
             }
 
             // 2. Générer un mot de passe temporaire
-            $temporaryPassword = \Illuminate\Support\Str::random(8);
+            $temporaryPassword = Str::random(8);
 
             // 3. Créer l'utilisateur
-            $user = \App\Models\User::create([
+            $user = User::create([
                 'name' => $employee->full_name,
                 'email' => $employee->email,
                 'login' => $employee->email, // ✅ AJOUTÉ : Utilise l'email comme login (ou $employee->matricule)
-                'password' => \Illuminate\Support\Facades\Hash::make($temporaryPassword),
+                'password' => Hash::make($temporaryPassword),
                 'employee_id' => $employee->id,
             ]);
 
-            \Illuminate\Support\Facades\Log::info("✅ User créé avec ID : {$user->id}");
+            Log::info("✅ User créé avec ID : {$user->id}");
 
             // 4. Assigner le rôle par défaut "employee"
             try {
                 $user->assignRole('employee');
-                \Illuminate\Support\Facades\Log::info("✅ Rôle 'employee' assigné");
+                Log::info("✅ Rôle 'employee' assigné");
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning("⚠️ Rôle 'employee' non trouvé : " . $e->getMessage());
+                Log::warning("⚠️ Rôle 'employee' non trouvé : ".$e->getMessage());
             }
 
             // 5. Envoyer l'email de bienvenue
             try {
                 $this->sendWelcomeEmail($user, $temporaryPassword);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning("⚠️ Email de bienvenue non envoyé : " . $e->getMessage());
+                Log::warning('⚠️ Email de bienvenue non envoyé : '.$e->getMessage());
             }
 
-            \Illuminate\Support\Facades\Log::info("✅✅✅ Compte utilisateur créé AVEC SUCCÈS pour {$employee->full_name}");
+            Log::info("✅✅✅ Compte utilisateur créé AVEC SUCCÈS pour {$employee->full_name}");
 
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("❌❌❌ ERREUR CRITIQUE création compte utilisateur : " . $e->getMessage(), [
+            Log::error('❌❌❌ ERREUR CRITIQUE création compte utilisateur : '.$e->getMessage(), [
                 'employee_id' => $employee->id,
                 'employee_name' => $employee->full_name,
             ]);
@@ -163,17 +144,17 @@ class EmployeeController extends Controller
     private function sendWelcomeEmail($user, string $temporaryPassword): void
     {
         try {
-            \Illuminate\Support\Facades\Mail::send('emails.welcome', [
+            Mail::send('emails.welcome', [
                 'user' => $user,
                 'temporaryPassword' => $temporaryPassword,
             ], function ($mail) use ($user) {
                 $mail->to($user->email)
-                     ->subject('[VICO RH] Bienvenue - Vos identifiants de connexion');
+                    ->subject('[VICO RH] Bienvenue - Vos identifiants de connexion');
             });
 
-            \Illuminate\Support\Facades\Log::info("✅ Email de bienvenue envoyé à {$user->email}");
+            Log::info("✅ Email de bienvenue envoyé à {$user->email}");
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("❌ Erreur envoi email bienvenue : " . $e->getMessage());
+            Log::error('❌ Erreur envoi email bienvenue : '.$e->getMessage());
         }
     }
 
