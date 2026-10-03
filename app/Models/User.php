@@ -49,6 +49,7 @@ class User extends Authenticatable implements PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'notification_preferences' => 'array',
         ];
     }
 
@@ -56,14 +57,6 @@ class User extends Authenticatable implements PasskeyUser
      * @return BelongsTo<Employee, $this>
      */
     public function employee(): BelongsTo
-            'notification_preferences' => 'array',
-        ];
-    }
-
-        /**
-     * Un utilisateur est lié à un employé
-     */
-    public function employee(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
