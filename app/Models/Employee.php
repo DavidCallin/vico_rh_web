@@ -7,18 +7,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property-read string $full_name
+ * @property-read float $seniority
+ */
 class Employee extends Model
 {
     use HasFactory;
     use SoftDeletes;
 
     protected $fillable = [
-        'matricule', 'first_name', 'last_name', 'birth_date', 
-        'gender', 'phone', 'email', 'address', 'hire_date', 
-        'site', 'status', 'position_id', 'category_id'
+        'matricule', 'first_name', 'last_name', 'birth_date',
+        'gender', 'phone', 'email', 'address', 'hire_date',
+        'site', 'status', 'position_id', 'category_id',
     ];
 
     protected $casts = [
@@ -28,7 +32,9 @@ class Employee extends Model
 
     // ===== RELATIONS BELONGS TO (FK dans employees) =====
 
-    // Un employé occupe un poste
+    /**
+     * @return BelongsTo<Position, $this>
+     */
     public function position(): BelongsTo
     {
         return $this->belongsTo(Position::class);
@@ -40,10 +46,19 @@ class Employee extends Model
         return $this->belongsTo(Category::class);
     }
 
-    // Accès rapide au département via le poste
-    public function department()
+    /**
+     * @return HasOneThrough<Department, Position, $this>
+     */
+    public function department(): HasOneThrough
     {
-        return $this->position->department;
+        return $this->hasOneThrough(
+            Department::class,
+            Position::class,
+            'id',
+            'id',
+            'position_id',
+            'department_id',
+        );
     }
 
     // ===== RELATIONS HAS MANY (FK dans les autres tables) =====
@@ -54,19 +69,25 @@ class Employee extends Model
         return $this->hasMany(Document::class);
     }
 
-    // Un employé a plusieurs contrats
+    /**
+     * @return HasMany<Contract, $this>
+     */
     public function contracts(): HasMany
     {
         return $this->hasMany(Contract::class);
     }
 
-    // Un employé a plusieurs congés (demandés)
+    /**
+     * @return HasMany<Leave, $this>
+     */
     public function leaves(): HasMany
     {
         return $this->hasMany(Leave::class);
     }
 
-    // Un employé a plusieurs absences
+    /**
+     * @return HasMany<Absence, $this>
+     */
     public function absences(): HasMany
     {
         return $this->hasMany(Absence::class);
@@ -100,7 +121,9 @@ class Employee extends Model
 
     // ===== RELATION AVEC USER (1 employé = 0 ou 1 user) =====
 
-    // Un employé peut avoir un compte utilisateur
+    /**
+     * @return HasOne<User, $this>
+     */
     public function user(): HasOne
     {
         return $this->hasOne(User::class);
@@ -119,7 +142,7 @@ class Employee extends Model
     // Scope pour récupérer uniquement les employés actifs
     public function scopeActive($query)
     {
-        return $query->where('status', 'actif');
+        return $query->where('status', 'active');
     }
 
     // Scope pour récupérer les employés en période d'essai

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Document extends Model
 {
     use HasFactory;
+
     protected $fillable = ['type', 'file_path', 'added_date', 'employee_id'];
 
     protected $casts = [

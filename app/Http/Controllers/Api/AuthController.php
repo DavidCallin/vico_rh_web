@@ -52,13 +52,13 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if(!$user || !Hash::check($request->password, $user->password)){
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants fournis sont incorrects.'],
             ]);
         }
 
-        if($user->status !== 'active') {
+        if ($user->status !== 'active') {
             throw ValidationException::withMessages([
                 'email' => ['Votre compte est inactif. Veuillez contacter l\'administrateur.'],
             ]);
@@ -81,6 +81,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Déconnexion réussie.'], 200);
     }
 
@@ -91,5 +92,4 @@ class AuthController extends Controller
     {
         return response()->json($request->user());
     }
-
 }

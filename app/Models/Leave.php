@@ -10,10 +10,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Leave extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'leave_type', 'start_date', 'end_date', 'days_count',
         'status', 'validation_date', 'reason',
-        'employee_id', 'validator_id', 'pay_period_id'
+        'employee_id', 'validator_id', 'pay_period_id',
     ];
 
     protected $casts = [
@@ -22,25 +23,33 @@ class Leave extends Model
         'validation_date' => 'date',
     ];
 
-    // L'employé qui a demandé le congé
+    /**
+     * @return BelongsTo<Employee, $this>
+     */
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
-    // L'employé qui a validé (nullable)
+    /**
+     * @return BelongsTo<Employee, $this>
+     */
     public function validator(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'validator_id');
     }
 
-    // La période de paie associée (nullable)
+    /**
+     * @return BelongsTo<PayPeriod, $this>
+     */
     public function payPeriod(): BelongsTo
     {
         return $this->belongsTo(PayPeriod::class);
     }
 
-    // Historique des mouvements liés à ce congé
+    /**
+     * @return HasMany<LeaveBalanceHistory, $this>
+     */
     public function balanceHistories(): HasMany
     {
         return $this->hasMany(LeaveBalanceHistory::class);

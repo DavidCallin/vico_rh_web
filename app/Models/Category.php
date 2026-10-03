@@ -9,9 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Category extends Model
 {
     use HasFactory;
+
     protected $fillable = ['name', 'code'];
 
-    // Une catégorie à plusieurs postes    
+    // Une catégorie à plusieurs postes
     public function positions(): HasMany
     {
         return $this->hasMany(Position::class);

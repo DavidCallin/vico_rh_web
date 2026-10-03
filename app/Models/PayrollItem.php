@@ -9,13 +9,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PayrollItem extends Model
 {
     use HasFactory;
+
     protected $fillable = [
-        'name', 'code', 'type', 'amount_or_rate', 
-        'calculation', 'is_active'
+        'name', 'code', 'type', 'amount_or_rate',
+        'calculation', 'is_active',
     ];
 
-    // Une rubrique apparaît dans plusieurs lignes de bulletin
-    public function paysLipLines(): HasMany
+    protected $casts = [
+        'is_active' => 'boolean',
+        'amount_or_rate' => 'decimal:2',
+    ];
+
+    public function payslipLines(): HasMany
     {
         return $this->hasMany(PayslipLine::class);
     }

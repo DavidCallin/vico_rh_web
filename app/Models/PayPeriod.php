@@ -10,9 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PayPeriod extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'month', 'year', 'status', 'opening_date',
-        'closing_date', 'closure_type', 'closed_by'
+        'closing_date', 'closure_type', 'closed_by',
     ];
 
     protected $casts = [
@@ -41,6 +42,9 @@ class PayPeriod extends Model
         return $this->hasMany(LeaveBalanceHistory::class);
     }
 
+    /**
+     * @return HasMany<Payslip, $this>
+     */
     public function payslips(): HasMany
     {
         return $this->hasMany(Payslip::class);

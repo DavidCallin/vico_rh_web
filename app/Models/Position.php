@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Position extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = ['title', 'department_id', 'category_id'];
 
-    // Un poste appartient à un département
+    /**
+     * @return BelongsTo<Department, $this>
+     */
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);

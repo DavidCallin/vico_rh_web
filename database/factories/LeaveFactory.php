@@ -3,15 +3,19 @@
 namespace Database\Factories;
 
 use App\Models\Employee;
+use App\Models\Leave;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends Factory<Leave>
+ */
 class LeaveFactory extends Factory
 {
     public function definition(): array
     {
         $startDate = fake()->dateTimeBetween('-1 year', '+1 year');
-        $endDate = (clone $startDate)->modify('+' . fake()->numberBetween(1, 15) . ' days');
-        
+        $endDate = (clone $startDate)->modify('+'.fake()->numberBetween(1, 15).' days');
+
         return [
             'leave_type' => fake()->randomElement(['annual', 'sick', 'unpaid', 'maternity', 'paternity', 'family', 'other']),
             'start_date' => $startDate,

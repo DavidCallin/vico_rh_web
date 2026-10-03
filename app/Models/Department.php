@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Permission\Models\Role;
 
 class Department extends Model
 {
@@ -22,19 +23,20 @@ class Department extends Model
         return $this->hasMany(Position::class);
     }
 
-    //Un département à un responsable
+    /**
+     * @return BelongsTo<Employee, $this>
+     */
     public function manager(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'manager_id');
     }
 
-    //Un département peut avoir plusieurs rôle (table pivot)
+    // Un département peut avoir plusieurs rôle (table pivot)
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(
-            \Spatie\Permission\Models\Role::class, 
+            Role::class,
             'role_department'
         );
     }
-
 }
