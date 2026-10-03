@@ -26,8 +26,6 @@ Route::get('/payslips/{payslip}/download-signed', [PayslipController::class, 'do
 // ==========================================
 // 2. ROUTES PROTÉGÉES (Authentification requise)
 // ==========================================
-Route::middleware('auth:sanctum')->group(function () {
-
 // Routes protégées par authentification
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
