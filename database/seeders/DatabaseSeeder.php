@@ -14,7 +14,6 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -51,7 +50,7 @@ class DatabaseSeeder extends Seeder
         // 6. Utilisateurs (10 employés uniques)
         $employeesForUsers = $employees->random(10);
         $users = collect(); // ← Initialiser une collection vide
-        
+
         foreach ($employeesForUsers as $employee) {
             $user = User::factory()->create([
                 'employee_id' => $employee->id,
@@ -108,92 +107,126 @@ class DatabaseSeeder extends Seeder
         $this->call(SettingsSeeder::class);
         $this->command->info('✅ Settings par défaut créés');
 
+        // 14. Comptes de démonstration (idempotent)
+        $this->seedDemo();
+
         $this->command->info('🎉 Base de données peuplée avec succès !');
     }
 
     private function seedDemo(): void
     {
-        $role = Role::findOrCreate('rh', 'web');
-        $category = Category::factory()->create([
-            'name' => 'Cadre',
-            'code' => 'DEMORH',
-        ]);
-        $department = Department::factory()->create([
-            'name' => 'Direction',
-            'description' => 'Direction générale',
-        ]);
-        $hrPosition = Position::factory()->create([
-            'title' => 'Responsable des ressources humaines',
-            'department_id' => $department->id,
-            'category_id' => $category->id,
-        ]);
-        $staffPosition = Position::factory()->create([
-            'title' => 'Assistant administratif',
-            'department_id' => $department->id,
-            'category_id' => $category->id,
-        ]);
+        $category = Category::query()->firstOrCreate(
+            ['code' => 'DEMORH'],
+            ['name' => 'Cadre'],
+        );
+        $department = Department::query()->firstOrCreate(
+            ['name' => 'Direction'],
+            ['description' => 'Direction générale'],
+        );
+        $hrPosition = Position::query()->firstOrCreate(
+            [
+                'title' => 'Responsable des ressources humaines',
+                'department_id' => $department->id,
+            ],
+            ['category_id' => $category->id],
+        );
+        $staffPosition = Position::query()->firstOrCreate(
+            [
+                'title' => 'Assistant administratif',
+                'department_id' => $department->id,
+            ],
+            ['category_id' => $category->id],
+        );
 
-        $hrEmployee = Employee::factory()->create([
-            'matricule' => 'EMP-RH-001',
-            'first_name' => 'Aline',
-            'last_name' => 'Dossou',
-            'email' => 'rh@paie.bj',
-            'gender' => 'F',
-            'status' => 'active',
-            'hire_date' => '2020-01-06',
-            'site' => 'Cotonou',
-            'position_id' => $hrPosition->id,
-            'category_id' => $category->id,
-        ]);
-        $employee = Employee::factory()->create([
-            'matricule' => 'EMP-SAL-001',
-            'first_name' => 'Kodjo',
-            'last_name' => 'Assogba',
-            'email' => 'employe@paie.bj',
-            'gender' => 'M',
-            'status' => 'active',
-            'hire_date' => '2024-03-01',
-            'site' => 'Cotonou',
-            'position_id' => $staffPosition->id,
-            'category_id' => $category->id,
-        ]);
+        $hrEmployee = Employee::query()->updateOrCreate(
+            ['matricule' => 'EMP-RH-001'],
+            [
+                'first_name' => 'Aline',
+                'last_name' => 'Dossou',
+                'email' => 'rh@paie.bj',
+                'gender' => 'F',
+                'status' => 'active',
+                'hire_date' => '2020-01-06',
+                'site' => 'Cotonou',
+                'position_id' => $hrPosition->id,
+                'category_id' => $category->id,
+            ],
+        );
+        $employee = Employee::query()->updateOrCreate(
+            ['matricule' => 'EMP-SAL-001'],
+            [
+                'first_name' => 'Kodjo',
+                'last_name' => 'Assogba',
+                'email' => 'employe@paie.bj',
+                'gender' => 'M',
+                'status' => 'active',
+                'hire_date' => '2024-03-01',
+                'site' => 'Cotonou',
+                'position_id' => $staffPosition->id,
+                'category_id' => $category->id,
+            ],
+        );
         $department->update(['manager_id' => $hrEmployee->id]);
 
-        User::factory()->create([
-            'name' => 'Aline Dossou',
-            'email' => 'rh@paie.bj',
-            'login' => 'rh',
-            'employee_id' => $hrEmployee->id,
-        ])->assignRole($role);
+        $hrUser = User::query()->updateOrCreate(
+            ['email' => 'rh@paie.bj'],
+            [
+                'name' => 'Aline Dossou',
+                'login' => 'rh',
+                'password' => 'password',
+                'status' => 'active',
+                'employee_id' => $hrEmployee->id,
+                'email_verified_at' => now(),
+            ],
+        );
+        $hrUser->syncRoles(['rh', 'admin']);
 
-        User::factory()->create([
-            'name' => 'Kodjo Assogba',
-            'email' => 'employe@paie.bj',
-            'login' => 'employe',
-            'employee_id' => $employee->id,
-        ]);
+        $employeeUser = User::query()->updateOrCreate(
+            ['email' => 'employe@paie.bj'],
+            [
+                'name' => 'Kodjo Assogba',
+                'login' => 'employe',
+                'password' => 'password',
+                'status' => 'active',
+                'employee_id' => $employee->id,
+                'email_verified_at' => now(),
+            ],
+        );
+        $employeeUser->syncRoles(['employee']);
 
-        Contract::factory()->create([
-            'employee_id' => $hrEmployee->id,
-            'contract_type' => 'cdi',
-            'start_date' => '2020-01-06',
-            'end_date' => null,
-            'base_salary' => 500000,
-        ]);
-        Contract::factory()->create([
-            'employee_id' => $employee->id,
-            'contract_type' => 'cdd',
-            'start_date' => now()->startOfMonth()->subMonths(2)->toDateString(),
-            'end_date' => now()->endOfMonth()->toDateString(),
-            'base_salary' => 350000,
-        ]);
-        Contract::factory()->create([
-            'employee_id' => $employee->id,
-            'contract_type' => 'cdd',
-            'start_date' => now()->subYear()->startOfMonth()->toDateString(),
-            'end_date' => now()->subMonth()->endOfMonth()->toDateString(),
-            'base_salary' => 280000,
-        ]);
+        Contract::query()->firstOrCreate(
+            [
+                'employee_id' => $hrEmployee->id,
+                'contract_type' => 'cdi',
+                'start_date' => '2020-01-06',
+            ],
+            [
+                'end_date' => null,
+                'base_salary' => 500000,
+            ],
+        );
+        Contract::query()->firstOrCreate(
+            [
+                'employee_id' => $employee->id,
+                'contract_type' => 'cdd',
+                'start_date' => now()->startOfMonth()->subMonths(2)->toDateString(),
+            ],
+            [
+                'end_date' => now()->endOfMonth()->toDateString(),
+                'base_salary' => 350000,
+            ],
+        );
+        Contract::query()->firstOrCreate(
+            [
+                'employee_id' => $employee->id,
+                'contract_type' => 'cdd',
+                'start_date' => now()->subYear()->startOfMonth()->toDateString(),
+            ],
+            [
+                'end_date' => now()->subMonth()->endOfMonth()->toDateString(),
+                'base_salary' => 280000,
+            ],
+        );
 
         PayPeriod::query()->firstOrCreate(
             ['month' => now()->month, 'year' => now()->year],
