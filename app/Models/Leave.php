@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Database\Factories\LeaveFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Leave extends Model
 {
+    /** @use HasFactory<LeaveFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -55,14 +58,20 @@ class Leave extends Model
         return $this->hasMany(LeaveBalanceHistory::class);
     }
 
-    // Scope pour les congés en attente
-    public function scopePending($query)
+    /**
+     * @param  Builder<Leave>  $query
+     * @return Builder<Leave>
+     */
+    public function scopePending(Builder $query): Builder
     {
         return $query->where('status', 'pending');
     }
 
-    // Scope pour les congés approuvés
-    public function scopeApproved($query)
+    /**
+     * @param  Builder<Leave>  $query
+     * @return Builder<Leave>
+     */
+    public function scopeApproved(Builder $query): Builder
     {
         return $query->where('status', 'approved');
     }

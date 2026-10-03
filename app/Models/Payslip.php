@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Payslip extends Model
 {
+    /** @use HasFactory<Factory<Payslip>> */
     use HasFactory;
 
     protected $fillable = [
@@ -51,8 +54,11 @@ class Payslip extends Model
         return $this->hasMany(PayslipLine::class);
     }
 
-    // Scope pour les bulletins validés
-    public function scopeValidated($query)
+    /**
+     * @param  Builder<Payslip>  $query
+     * @return Builder<Payslip>
+     */
+    public function scopeValidated(Builder $query): Builder
     {
         return $query->where('status', 'validated');
     }

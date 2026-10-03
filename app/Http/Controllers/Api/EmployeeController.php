@@ -8,13 +8,15 @@ use App\Http\Requests\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 class EmployeeController extends Controller
 {
     /**
      * Liste tous les employés (avec pagination)
      */
-    public function index(Request $request)
+    public function index(Request $request): AnonymousResourceCollection
     {
         $query = Employee::with(['position.department', 'category']);
 
@@ -48,7 +50,7 @@ class EmployeeController extends Controller
     /**
      * Affiche un employé spécifique
      */
-    public function show(Employee $employee)
+    public function show(Employee $employee): EmployeeResource
     {
         $employee->load(['position.department', 'category', 'contracts', 'leaves']);
 
@@ -58,7 +60,7 @@ class EmployeeController extends Controller
     /**
      * Crée un nouvel employé
      */
-    public function store(StoreEmployeeRequest $request)
+    public function store(StoreEmployeeRequest $request): EmployeeResource
     {
         $employee = Employee::create($request->validated());
 
@@ -68,7 +70,7 @@ class EmployeeController extends Controller
     /**
      * Met à jour un employé existant
      */
-    public function update(UpdateEmployeeRequest $request, Employee $employee)
+    public function update(UpdateEmployeeRequest $request, Employee $employee): EmployeeResource
     {
         $employee->update($request->validated());
 
@@ -78,7 +80,7 @@ class EmployeeController extends Controller
     /**
      * Supprime un employé
      */
-    public function destroy(Employee $employee)
+    public function destroy(Employee $employee): Response
     {
         $employee->delete();
 

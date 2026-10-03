@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\PayrollItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayrollItem extends Model
 {
+    /** @use HasFactory<PayrollItemFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -20,6 +22,9 @@ class PayrollItem extends Model
         'amount_or_rate' => 'decimal:2',
     ];
 
+    /**
+     * @return HasMany<PayslipLine, $this>
+     */
     public function payslipLines(): HasMany
     {
         return $this->hasMany(PayslipLine::class);

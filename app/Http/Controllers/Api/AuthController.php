@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -13,7 +14,7 @@ class AuthController extends Controller
     /**
      * Inscription d'un nouvel utilisateur
      */
-    public function register(Request $request)
+    public function register(Request $request): JsonResponse
     {
         $request->validate([
             'name' => 'required|string|max:255',
@@ -43,7 +44,7 @@ class AuthController extends Controller
     /**
      * Connexion d'un utilisateur
      */
-    public function login(Request $request)
+    public function login(Request $request): JsonResponse
     {
         $request->validate([
             'email' => 'required|email',
@@ -78,7 +79,7 @@ class AuthController extends Controller
     /**
      * Déconnexion de l'utilisateur
      */
-    public function logout(Request $request)
+    public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();
 
@@ -88,7 +89,7 @@ class AuthController extends Controller
     /**
      * Récupérer l'utilisateur connecté
      */
-    public function user(Request $request)
+    public function user(Request $request): JsonResponse
     {
         return response()->json($request->user());
     }

@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\AbsenceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Absence extends Model
 {
+    /** @use HasFactory<AbsenceFactory> */
     use HasFactory;
 
     protected $fillable = [
