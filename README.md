@@ -1,4 +1,4 @@
-# Paie Bénin
+# VICO RH PAIE
 
 ![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-777BB4?style=flat-square)
@@ -6,7 +6,7 @@
 ![API](https://img.shields.io/badge/API-REST-blue?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-In%20Development-orange?style=flat-square)
 
-**Paie Bénin** est une application web de gestion des ressources humaines et de la paie, conçue pour répondre aux besoins des petites entreprises au Bénin.
+**VICO RH PAIE** est une application web de gestion des ressources humaines et de la paie, conçue pour répondre aux besoins des petites entreprises au Bénin.
 
 Elle centralise la gestion du personnel, des contrats de travail, des congés, des absences et des bulletins de paie. Elle intègre également un mécanisme de calcul de l'Impôt sur les traitements et salaires (ITS), adapté au contexte fiscal béninois.
 
