@@ -1,82 +1,446 @@
 # Paie Bénin
 
-Application web de gestion du personnel pour une petite entreprise au Bénin : congés, absences, contrats et bulletins de paie en francs CFA (XOF). L'interface métier est en français. L'authentification reprend le kit Laravel (Fortify) déjà en place.
+![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=flat-square)
+![PHP](https://img.shields.io/badge/PHP-777BB4?style=flat-square)
+![Database](https://img.shields.io/badge/Database-MySQL-4479A1?style=flat-square)
+![API](https://img.shields.io/badge/API-REST-blue?style=flat-square)
+![Status](https://img.shields.io/badge/Status-In%20Development-orange?style=flat-square)
 
-## Déjà en place
+**Paie Bénin** est une application web de gestion des ressources humaines et de la paie, conçue pour répondre aux besoins des petites entreprises au Bénin.
 
-- Connexion, inscription, réinitialisation du mot de passe, vérification d'e-mail, double authentification et clés d'accès.
-- Profil, sécurité et apparence.
-- API JSON (Sanctum) : inscription, connexion, déconnexion, utilisateur courant, et CRUD des salariés.
-- Modèle de données : salariés, postes, départements, catégories, contrats, congés, absences, périodes de paie, rubriques et bulletins.
+Elle centralise la gestion du personnel, des contrats de travail, des congés, des absences et des bulletins de paie. Elle intègre également un mécanisme de calcul de l'Impôt sur les traitements et salaires (ITS), adapté au contexte fiscal béninois.
 
-## Corrections
+L'interface métier est en français et les montants sont exprimés en francs CFA (XOF).
 
-- Les migrations des postes et des salariés échouaient (`contrained` au lieu de `constrained`) : la clé étrangère n'était pas créée et `migrate` s'arrêtait.
-- La colonne `payroll_items.isActive` ne correspondait pas au modèle (`is_active`).
-- L'inscription web n'enregistrait pas `users.login`, colonne obligatoire : la création du compte échouait.
-- La connexion API n'enregistrait pas `last_login_at`, absent des champs assignables.
-- Le filtre « salariés actifs » cherchait le statut `actif`, alors que la base utilise `active`.
-- La validation des salariés acceptait un statut et un genre incompatibles avec le schéma (`on_leave`, genre facultatif) et ne vérifiait pas le format de l'e-mail.
-- La fiche salarié API ne renvoyait pas le département : la relation était appelée comme une méthode et la ressource cherchait une relation inexistante.
+---
 
-## Ajouts
+## Sommaire
 
-- Demandes de congé et d'absence, avec approbation ou rejet.
-- Notification dans l'application et e-mail à chaque nouvelle demande, approbation, rejet, et à la mise à disposition du bulletin.
-- Période de paie : un bulletin par salarié couvert par un contrat. Le salaire suit le contrat, au prorata des jours calendaires couverts. Les congés sans solde et les absences non justifiées approuvés réduisent le brut. Les autres absences ne sont pas déduites.
-- Ligne ITS verrouillée, calculée par `App\Payroll\BeninItsCalculator` (barème du Code général des impôts 2025, articles 122 et 125, redevance ORTB/SRTB de mars et de juin). Une tentative de modification est refusée.
-- Le bulletin est visible dans l'espace Bulletins et envoyé par e-mail.
-- Contrats enregistrés et PDF généré automatiquement.
-- Rappels des contrats échus ou à moins de 30 jours de l'échéance (tableau de bord, liste des contrats, notification, e-mail). La commande `php artisan contracts:remind` est planifiée chaque jour ; l'ouverture du tableau de bord ou des contrats déclenche aussi les rappels dus.
+- [Fonctionnalités](#fonctionnalités)
+- [Gestion de la paie](#gestion-de-la-paie)
+- [Gestion des contrats](#gestion-des-contrats)
+- [Architecture et technologies](#architecture-et-technologies)
+- [Modèle de données](#modèle-de-données)
+- [API REST](#api-rest)
+- [Installation et configuration](#installation-et-configuration)
+- [Variables d'environnement](#variables-denvironnement)
+- [Comptes de démonstration](#comptes-de-démonstration)
+- [Tests et compilation](#tests-et-compilation)
+- [Limites fonctionnelles](#limites-fonctionnelles)
+- [Auteur](#auteur)
 
-Le calcul ne couvre pas les cotisations CNSS, les avantages en nature ni l'atténuation des rémunérations exceptionnelles (fin de carrière, treizième mois) : ces règles ne sont pas toutes confirmées ici et ne font pas partie de ce sous-ensemble.
+---
 
-## Lancer l'application
+## Fonctionnalités
+
+### 1. Gestion du personnel
+
+- Création et gestion des fiches salariés.
+- Gestion des postes et des départements.
+- Gestion des catégories de personnel.
+- Consultation des informations professionnelles.
+- Filtrage des salariés selon leur statut.
+- Gestion des contrats associés aux salariés.
+
+### 2. Gestion des congés et absences
+
+- Soumission des demandes de congé.
+- Déclaration des absences.
+- Approbation ou rejet des demandes par les ressources humaines.
+- Suivi des demandes et de leur statut.
+- Notifications dans l'application et par e-mail lors des différentes étapes.
+
+### 3. Gestion de la paie
+
+- Création et gestion des périodes de paie.
+- Génération des bulletins pour les salariés couverts par un contrat.
+- Calcul du salaire selon les conditions contractuelles.
+- Prise en compte des jours calendaires couverts par la période.
+- Déduction des congés sans solde et des absences non justifiées approuvés.
+- Calcul automatique de l'ITS selon le barème intégré.
+- Mise à disposition des bulletins dans l'espace salarié.
+- Envoi des bulletins par e-mail.
+
+### 4. Gestion des contrats
+
+- Enregistrement des contrats de travail.
+- Génération automatique des contrats au format PDF.
+- Suivi des dates de début et de fin.
+- Détection des contrats échus ou arrivant prochainement à échéance.
+- Rappels automatiques avant expiration.
+
+### 5. Notifications
+
+Le système informe les utilisateurs des événements importants :
+
+- Nouvelle demande de congé ou d'absence.
+- Approbation ou rejet d'une demande.
+- Mise à disposition d'un bulletin de paie.
+- Contrat arrivé à échéance ou proche de son expiration.
+
+Les notifications sont disponibles dans l'application et peuvent également être envoyées par e-mail.
+
+### 6. Authentification et sécurité
+
+L'application s'appuie sur les fonctionnalités d'authentification du kit Laravel déjà intégré.
+
+Fonctionnalités disponibles :
+
+- Inscription et connexion.
+- Réinitialisation du mot de passe.
+- Vérification de l'adresse e-mail.
+- Authentification à deux facteurs.
+- Clés d'accès (Passkeys).
+- Gestion du profil.
+- Paramètres de sécurité.
+- Gestion de l'apparence.
+
+Une API JSON sécurisée avec Laravel Sanctum permet également l'authentification et l'accès aux fonctionnalités prévues.
+
+---
+
+## Gestion de la paie
+
+Le moteur de paie applique les règles de calcul définies dans l'application.
+
+### Calcul du salaire
+
+Pour chaque période de paie, un bulletin est généré pour chaque salarié couvert par un contrat.
+
+Le calcul tient compte :
+
+- Du salaire défini dans le contrat.
+- Du nombre de jours calendaires couverts par la période.
+- Des congés sans solde approuvés.
+- Des absences non justifiées approuvées.
+
+Les autres absences ne sont pas déduites du salaire.
+
+### Calcul de l'ITS
+
+Le calcul de l'Impôt sur les traitements et salaires est centralisé dans la classe :
+
+`App\Payroll\BeninItsCalculator`
+
+Le calcul repose sur le barème du Code général des impôts 2025, notamment les articles 122 et 125, ainsi que sur les dispositions relatives à la redevance ORTB/SRTB de mars et de juin.
+
+La ligne ITS du bulletin est verrouillée : toute tentative de modification manuelle est refusée.
+
+Le moteur de paie couvre actuellement un sous-ensemble des règles de calcul. Les limites sont détaillées dans la section [Limites fonctionnelles](#limites-fonctionnelles).
+
+---
+
+## Gestion des contrats
+
+La gestion des contrats comprend un système de surveillance des échéances.
+
+Les rappels concernent :
+
+- Les contrats déjà échus.
+- Les contrats arrivant à échéance dans les 30 prochains jours.
+
+Les alertes sont accessibles depuis :
+
+- Le tableau de bord.
+- La liste des contrats.
+- Les notifications de l'application.
+- Les e-mails.
+
+La commande Artisan suivante permet de déclencher les rappels :
+
+```bash
+php artisan contracts:remind
+```
+
+Cette commande est planifiée quotidiennement. L'ouverture du tableau de bord ou de la liste des contrats déclenche également les rappels dus.
+
+---
+
+## Architecture et technologies
+
+### Backend et API
+
+- Laravel
+- PHP
+- Laravel Fortify pour l'authentification et la sécurité.
+- Laravel Sanctum pour l'authentification de l'API.
+- API REST JSON.
+
+### Base de données
+
+- MySQL
+- Migrations Laravel pour la gestion du schéma.
+- Seeders pour l'initialisation des données.
+
+### Frontend
+
+L'application utilise l'environnement frontend configuré dans le projet. npm est utilisé pour la gestion des dépendances et la compilation des ressources.
+
+---
+
+## Modèle de données
+
+Le modèle de données est organisé autour des principales entités métier :
+
+| Entité | Description |
+|---|---|
+| Users | Comptes utilisateurs et authentification |
+| Employees | Informations des salariés |
+| Positions | Postes occupés |
+| Departments | Départements de l'entreprise |
+| Categories | Catégories de personnel |
+| Contracts | Contrats de travail |
+| Leaves | Demandes de congé |
+| Absences | Déclarations d'absence |
+| Payroll Periods | Périodes de paie |
+| Payroll Items | Rubriques de paie |
+| Payslips | Bulletins de paie |
+
+---
+
+## API REST
+
+L'application expose une API JSON permettant notamment de gérer l'authentification et les salariés.
+
+### Authentification
+
+Les fonctionnalités disponibles comprennent :
+
+- Inscription.
+- Connexion.
+- Déconnexion.
+- Récupération des informations de l'utilisateur connecté.
+
+### Gestion des salariés
+
+L'API prend en charge les opérations CRUD :
+
+- Création d'un salarié.
+- Consultation de la liste des salariés.
+- Consultation d'une fiche salarié.
+- Modification des informations.
+- Suppression d'un salarié.
+
+L'authentification des requêtes API est assurée par Laravel Sanctum.
+
+---
+
+## Installation et configuration
+
+### Prérequis
+
+- PHP compatible avec la version de Laravel utilisée.
+- Composer.
+- Node.js et npm.
+- MySQL.
+- Git.
+
+### 1. Cloner le dépôt
+
+```bash
+git clone https://github.com/DavidCallin/vico_rh_web.git
+cd paie-benin
+```
+
+### 2. Installer les dépendances PHP
 
 ```bash
 composer install
+```
+
+### 3. Configurer l'environnement
+
+Créer le fichier d'environnement à partir du modèle fourni :
+
+```bash
 cp .env.example .env
+```
+
+Générer ensuite la clé de l'application :
+
+```bash
 php artisan key:generate
-touch database/database.sqlite
+```
+
+### 4. Créer la base de données MySQL
+
+Créer une base de données nommée `paie_benin` dans MySQL.
+
+Exemple avec le client MySQL :
+
+```sql
+CREATE DATABASE paie_benin
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+### 5. Configurer la connexion MySQL
+
+Dans le fichier `.env`, renseigner les informations de connexion :
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=paie_benin
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+Adapter le nom d'utilisateur et le mot de passe selon la configuration de votre serveur MySQL.
+
+### 6. Exécuter les migrations et seeders
+
+```bash
 php artisan migrate --seed
+```
+
+Cette commande crée les tables nécessaires et initialise les données de démonstration.
+
+### 7. Installer les dépendances frontend
+
+```bash
 npm install
+```
+
+### 8. Démarrer l'application
+
+Dans un premier terminal :
+
+```bash
 npm run dev
 ```
 
-Dans un autre terminal : `php artisan serve`.
-
-Comptes de démonstration après le seed (mot de passe `password`) :
-
-- Ressources humaines : `rh@paie.bj`
-- Salarié : `employe@paie.bj`
-
-Le salarié de démonstration a un CDD qui se termine à la fin du mois en cours et un contrat déjà échu. La période du mois en cours est ouverte : le compte RH peut lancer la paie.
+Dans un second terminal :
 
 ```bash
-npm run build
-php artisan test
+php artisan serve
 ```
+
+L'application sera accessible à l'adresse :
+
+`http://127.0.0.1:8000`
+
+---
 
 ## Variables d'environnement
 
-Courriel : le transport se règle avec `MAIL_MAILER`. La valeur `log` écrit le message dans `storage/logs/laravel.log` (repli de développement, aucun serveur SMTP). Pour un envoi réel :
+### Configuration de la base de données
 
-- `MAIL_MAILER=smtp`
-- `MAIL_SCHEME` (`smtp` ou `smtps`)
-- `MAIL_HOST`
-- `MAIL_PORT`
-- `MAIL_USERNAME`
-- `MAIL_PASSWORD`
-- `MAIL_FROM_ADDRESS`
-- `MAIL_FROM_NAME`
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=paie_benin
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-Aucun mot de passe n'est versionné.
+### Configuration des e-mails
 
-Paie et contrats :
+Le transport des e-mails est défini avec `MAIL_MAILER`.
 
-- `PAYROLL_EMPLOYER_NAME` : raison sociale imprimée sur le contrat
-- `PAYROLL_EMPLOYER_ADDRESS`
-- `PAYROLL_EMPLOYER_CITY` (Cotonou par défaut)
-- `PAYROLL_CONTRACT_REMINDER_DAYS` : délai avant échéance, 30 jours par défaut
+En développement, la configuration suivante permet de consulter les e-mails générés dans les journaux Laravel :
 
-Les montants sont en F CFA (XOF).
+```env
+MAIL_MAILER=log
+```
+
+Pour utiliser un serveur SMTP :
+
+```env
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtp
+MAIL_HOST=
+MAIL_PORT=
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+### Configuration des contrats et de la paie
+
+```env
+PAYROLL_EMPLOYER_NAME=
+PAYROLL_EMPLOYER_ADDRESS=
+PAYROLL_EMPLOYER_CITY=Cotonou
+PAYROLL_CONTRACT_REMINDER_DAYS=30
+```
+
+| Variable | Description |
+|---|---|
+| `PAYROLL_EMPLOYER_NAME` | Raison sociale imprimée sur les contrats |
+| `PAYROLL_EMPLOYER_ADDRESS` | Adresse de l'entreprise |
+| `PAYROLL_EMPLOYER_CITY` | Ville de l'entreprise |
+| `PAYROLL_CONTRACT_REMINDER_DAYS` | Nombre de jours avant l'échéance pour déclencher un rappel |
+
+Aucun mot de passe ni secret ne doit être versionné dans le dépôt Git. Le fichier `.env` doit rester exclu du suivi Git.
+
+---
+
+## Comptes de démonstration
+
+Après l'exécution des seeders, deux comptes de démonstration sont disponibles.
+
+| Profil | Adresse e-mail | Mot de passe |
+|---|---|---|
+| Ressources humaines | `rh@paie.bj` | `password` |
+| Salarié | `employe@paie.bj` | `password` |
+
+Le salarié de démonstration dispose :
+
+- D'un CDD qui se termine à la fin du mois en cours.
+- D'un contrat déjà arrivé à échéance.
+
+La période de paie du mois en cours est ouverte. Le compte RH peut donc lancer la génération de la paie.
+
+Ces identifiants sont réservés à la démonstration locale. Ils doivent être supprimés ou remplacés avant toute mise en production.
+
+---
+
+## Tests et compilation
+
+### Exécuter les tests
+
+```bash
+php artisan test
+```
+
+### Compiler les ressources frontend
+
+```bash
+npm run build
+```
+
+---
+
+## Limites fonctionnelles
+
+Le calcul de paie actuel ne prend pas encore en charge :
+
+- Les cotisations CNSS.
+- Les avantages en nature.
+- L'atténuation des rémunérations exceptionnelles, notamment les indemnités de fin de carrière et le treizième mois.
+
+Ces règles nécessitent des confirmations complémentaires et ne font pas partie du périmètre actuel du moteur de calcul.
+
+L'application ne doit donc pas être considérée comme couvrant à elle seule l'intégralité des obligations légales et fiscales liées à la paie au Bénin.
+
+---
+
+## Objectif du projet
+
+Paie Bénin vise à simplifier la gestion administrative et salariale des petites entreprises béninoises en regroupant dans un même outil les opérations essentielles liées au personnel, aux contrats, aux absences et à la rémunération.
+
+Le projet met l'accent sur l'automatisation des tâches répétitives, la centralisation des informations et la prise en compte des particularités du contexte béninois.
+
+---
+
+## Auteur
+
+**Callin HOUNGA**
+
+Développeur Web Backend / Full-Stack
+
+Conception et développement de solutions numériques, d'applications web et d'outils de digitalisation des processus métiers.
